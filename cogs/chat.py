@@ -6,7 +6,7 @@ from services.odysseus_client import OdysseusClient
 
 
 class Chat(commands.Cog):
-    """Thin Discord interface to the Odysseus core service."""
+    """Thin Discord interface to the V.E.G.A.R.D. core service."""
 
     def __init__(self, bot: commands.Bot, odysseus: OdysseusClient, chat_channel_id: int | None):
         self.bot = bot
@@ -15,33 +15,33 @@ class Chat(commands.Cog):
 
     # ── /chat (optional, works anywhere) ──────────────────────────────────────
 
-    @app_commands.command(name="chat", description="Chat with Odysseus (works in any channel)")
+    @app_commands.command(name="chat", description="Chat with V.E.G.A.R.D. (works in any channel)")
     @app_commands.describe(message="Your message")
     async def slash_chat(self, interaction: discord.Interaction, message: str):
         await interaction.response.defer(thinking=True)
         try:
             reply = await self.odysseus.chat(interaction.user.id, message)
         except Exception as exc:
-            await interaction.followup.send(f"Odysseus is down: `{exc}`", ephemeral=True)
+            await interaction.followup.send(f"V.E.G.A.R.D. is down: `{exc}`", ephemeral=True)
             return
         embed = discord.Embed(description=reply, color=discord.Color.blurple())
-        embed.set_footer(text=f"Odysseus · {interaction.user.display_name}")
+        embed.set_footer(text=f"V.E.G.A.R.D. · {interaction.user.display_name}")
         await interaction.followup.send(embed=embed)
 
     # ── /clear ────────────────────────────────────────────────────────────────
 
-    @app_commands.command(name="clear", description="Clear your conversation history with Odysseus")
+    @app_commands.command(name="clear", description="Clear this channel's conversation history with V.E.G.A.R.D.")
     async def slash_clear(self, interaction: discord.Interaction):
-        await self.odysseus.clear(interaction.user.id)
+        await self.odysseus.clear(str(interaction.channel_id))
         await interaction.response.send_message("History cleared.", ephemeral=True)
 
     # ── /history ──────────────────────────────────────────────────────────────
 
-    @app_commands.command(name="history", description="Check your conversation history size")
+    @app_commands.command(name="history", description="Check this channel's conversation history size")
     async def slash_history(self, interaction: discord.Interaction):
-        count = await self.odysseus.history_count(interaction.user.id)
+        count = await self.odysseus.history_count(str(interaction.channel_id))
         await interaction.response.send_message(
-            f"**{count}** message(s) in your history.", ephemeral=True
+            f"**{count}** message(s) in this channel's history.", ephemeral=True
         )
 
     # ── message handler ───────────────────────────────────────────────────────
@@ -55,9 +55,10 @@ class Chat(commands.Cog):
         if self.chat_channel_id and message.channel.id == self.chat_channel_id:
             async with message.channel.typing():
                 try:
-                    reply = await self.odysseus.chat(message.author.id, message.content)
+                    content = f"{message.author.display_name}: {message.content}"
+                    reply = await self.odysseus.chat(str(message.channel.id), content)
                 except Exception as exc:
-                    await message.reply(f"Odysseus is down: `{exc}`")
+                    await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                     return
             await self._send(message, reply)
             return
@@ -76,9 +77,10 @@ class Chat(commands.Cog):
 
         async with message.channel.typing():
             try:
-                reply = await self.odysseus.chat(message.author.id, content)
+                content = f"{message.author.display_name}: {content}"
+                reply = await self.odysseus.chat(str(message.channel.id), content)
             except Exception as exc:
-                await message.reply(f"Odysseus is down: `{exc}`")
+                await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                 return
 
         await self._send(message, reply)

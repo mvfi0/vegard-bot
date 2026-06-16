@@ -15,11 +15,12 @@ Usage:
 import argparse
 from pathlib import Path
 
-import torch
 from datasets import load_dataset
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
+
+import torch
 
 BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 OUTPUT_DIR = "finetune/output/adapter"
@@ -45,6 +46,7 @@ def main(dataset_path: str, epochs: int, output_dir: str):
         attn_implementation="eager",
     )
     model.config.use_cache = False
+    model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
 
     tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL)
     tokenizer.pad_token = tokenizer.eos_token
@@ -76,7 +78,7 @@ def main(dataset_path: str, epochs: int, output_dir: str):
         save_strategy="epoch",
         report_to="none",
         dataset_text_field="text",
-        max_seq_length=2048,
+        max_length=2048,
     )
 
     trainer = SFTTrainer(

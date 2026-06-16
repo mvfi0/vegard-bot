@@ -21,8 +21,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import torch
-from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 BASE_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
@@ -33,10 +31,13 @@ LLAMA_CPP_DIR = "llama.cpp"
 
 
 def merge(adapter_dir: str, merged_dir: str):
+    import torch
+    from peft import PeftModel
+
     print("Loading base model (full precision for merging)...")
     model = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        torch_dtype=torch.float16,
+        dtype=torch.float16,
         device_map="cpu",
     )
     tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
@@ -64,7 +65,7 @@ def convert_to_gguf(merged_dir: str, gguf_path: str, llamacpp_dir: str):
         sys.executable, str(convert_script),
         merged_dir,
         "--outfile", gguf_path,
-        "--outtype", "q4_k_m",   # 4-bit quantization, good quality/size tradeoff
+        "--outtype", "f16",
     ], check=True)
     print(f"GGUF saved: {gguf_path}")
 
@@ -90,11 +91,17 @@ if __name__ == "__main__":
     parser.add_argument("--merged", default=MERGED_DIR)
     parser.add_argument("--gguf", default=GGUF_PATH)
     parser.add_argument("--llamacpp", default=LLAMA_CPP_DIR)
+    parser.add_argument("--skip-merge", action="store_true", help="Skip merge if merged model already exists")
     args = parser.parse_args()
 
-    if not Path(args.adapter).exists():
-        raise FileNotFoundError(f"Adapter not found: {args.adapter}. Run train.py first.")
+    if not args.skip_merge:
+        if not Path(args.adapter).exists():
+            raise FileNotFoundError(f"Adapter not found: {args.adapter}. Run train.py first.")
+        merge(args.adapter, args.merged)
+    else:
+        if not Path(args.merged).exists():
+            raise FileNotFoundError(f"Merged model not found: {args.merged}. Run without --skip-merge first.")
+        print(f"Skipping merge, using existing {args.merged}")
 
-    merge(args.adapter, args.merged)
     convert_to_gguf(args.merged, args.gguf, args.llamacpp)
     create_modelfile(args.gguf)

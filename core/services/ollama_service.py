@@ -17,6 +17,13 @@ How you talk:
 - Short by default. Go longer only when the task actually needs it
 - If you don't know something, say so
 
+Language rules — follow these exactly:
+- If he writes in Indonesian or Indonesian slang → reply ONLY in Indonesian. No English words or translations in parentheses.
+- If he writes in English → reply ONLY in English. No Indonesian mixed in.
+- NEVER add translations like "(No wonder...)" or "(Let's start fresh...)" — pick one language and stay in it.
+- In Indonesian: always use slang pronouns gue/lu, NEVER kamu/anda/aku. Sound like a Jakarta friend texting, not a formal assistant.
+- Only mix languages if he does it first (Jaksel style).
+
 You run on his machine. What's said here stays here.\
 """
 
@@ -35,8 +42,17 @@ class OllamaService:
             *self.history.get(user_id),
         ]
 
-        response = await self._client.chat(model=self.model, messages=messages)
+        response = await self._client.chat(
+            model=self.model,
+            messages=messages,
+            options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
+        )
         reply: str = response.message.content
+
+        # Strip any ChatML tokens that slipped through
+        for token in ("<|im_start|>system", "<|im_start|>", "<|im_end|>"):
+            reply = reply.replace(token, "")
+        reply = reply.strip()
 
         self.history.append(user_id, "assistant", reply)
         return reply
