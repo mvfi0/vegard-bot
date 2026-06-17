@@ -8,12 +8,13 @@ A personal AI assistant running entirely on your own hardware — no cloud, no A
 ## Architecture
 
 ```
-Ollama (local LLM on GPU)
-  └── Odysseus Core  ─  FastAPI service (port 8000)
-        └── Discord Bot  ─  discord.py client
+Discord
+  └── Bot (discord.py)
+        └── OllamaService (Python)
+              └── Ollama (local LLM on GPU)
 ```
 
-The core and the bot are separate processes. The bot is a thin client — all AI logic lives in the core, making it easy to plug in other frontends later (web UI, CLI, etc.).
+The bot calls Ollama directly via the `ollama` Python library. No intermediary service — simple, fast, and everything runs on your machine.
 
 ---
 
@@ -22,9 +23,8 @@ The core and the bot are separate processes. The bot is a thin client — all AI
 | Layer | Tech |
 |---|---|
 | Discord bot | discord.py 2.x |
-| Core API | FastAPI + uvicorn |
 | AI backend | Ollama (LLaMA 3.1 8B by default) |
-| HTTP client | httpx |
+| Ollama client | ollama-python |
 
 ---
 
@@ -52,7 +52,6 @@ cp .env.example .env
 Fill in `.env`:
 ```env
 DISCORD_TOKEN=your_bot_token
-ODYSSEUS_URL=http://localhost:8000
 OLLAMA_MODEL=llama3.1:8b
 CHAT_CHANNEL_ID=your_channel_id   # free-chat channel, no command needed here
 ```
@@ -60,12 +59,7 @@ CHAT_CHANNEL_ID=your_channel_id   # free-chat channel, no command needed here
 To get `CHAT_CHANNEL_ID`: Discord Settings → Advanced → enable **Developer Mode**, then right-click your channel → **Copy Channel ID**.
 
 ### 5. Run
-Open two terminals:
 ```bash
-# Terminal 1 — Odysseus core
-python -m uvicorn core.main:app --reload
-
-# Terminal 2 — Discord bot
 python main.py
 ```
 
@@ -89,19 +83,14 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 | `/clear` | Clear your conversation history |
 | `/history` | Check how many messages are in your history |
 
-### Core API endpoints
-
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Health check |
-| `GET /models` | List available Ollama models |
-| `POST /chat` | Send a message |
-| `GET /chat/{user_id}/history` | Get history size |
-| `DELETE /chat/{user_id}` | Clear history |
-
 ---
 
 ## Changelog
+
+### v0.5.0 — 2026-06-17
+- Removed FastAPI core and Odysseus integration — bot now calls Ollama directly via the `ollama` Python library
+- Simpler architecture: one process, no HTTP intermediary, faster response times
+- Switched default model to `llama3.1:8b` (Q4, GPU-only, ~4.7 GB VRAM)
 
 ### v0.4.0 — 2026-06-17
 - Bot now detects current date and time and includes it in every response
@@ -132,7 +121,7 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changing the model
 
-Any model pulled in Ollama works. Update `OLLAMA_MODEL` in `.env` and restart the core.
+Any model pulled in Ollama works. Update `OLLAMA_MODEL` in `.env` and restart the bot.
 
 ```bash
 ollama pull mistral

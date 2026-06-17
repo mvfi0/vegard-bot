@@ -1,5 +1,6 @@
 .env
 users.json
+odysseus_sessions.json
 __pycache__/
 *.py[cod]
 *.egg-info/

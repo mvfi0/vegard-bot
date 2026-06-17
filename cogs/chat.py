@@ -5,7 +5,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from services.odysseus_client import OdysseusClient
+from core.services.ollama_service import OllamaService
 
 _USERS_FILE = Path(__file__).parent.parent / "users.json"
 
@@ -56,9 +56,9 @@ def _build_context(users: dict) -> str | None:
 class Chat(commands.Cog):
     """Thin Discord interface to the V.E.G.A.R.D. core service."""
 
-    def __init__(self, bot: commands.Bot, odysseus: OdysseusClient, chat_channel_id: int | None):
+    def __init__(self, bot: commands.Bot, ai: OllamaService, chat_channel_id: int | None):
         self.bot = bot
-        self.odysseus = odysseus
+        self.ai = ai
         self.chat_channel_id = chat_channel_id
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
@@ -70,7 +70,8 @@ class Chat(commands.Cog):
     async def slash_chat(self, interaction: discord.Interaction, message: str):
         await interaction.response.defer(thinking=True)
         try:
-            reply = await self.odysseus.chat(interaction.user.id, message)
+            content = _tagged(interaction.user.display_name, message)
+            reply = await self.ai.chat(str(interaction.channel_id), content, self._context)
         except Exception as exc:
             await interaction.followup.send(f"V.E.G.A.R.D. is down: `{exc}`", ephemeral=True)
             return
@@ -82,14 +83,14 @@ class Chat(commands.Cog):
 
     @app_commands.command(name="clear", description="Clear this channel's conversation history with V.E.G.A.R.D.")
     async def slash_clear(self, interaction: discord.Interaction):
-        await self.odysseus.clear(str(interaction.channel_id))
+        self.ai.clear_history(str(interaction.channel_id))
         await interaction.response.send_message("History cleared.", ephemeral=True)
 
     # ── /history ──────────────────────────────────────────────────────────────
 
     @app_commands.command(name="history", description="Check this channel's conversation history size")
     async def slash_history(self, interaction: discord.Interaction):
-        count = await self.odysseus.history_count(str(interaction.channel_id))
+        count = self.ai.history_count(str(interaction.channel_id))
         await interaction.response.send_message(
             f"**{count}** message(s) in this channel's history.", ephemeral=True
         )
@@ -106,7 +107,7 @@ class Chat(commands.Cog):
             async with message.channel.typing():
                 try:
                     content = _tagged(message.author.display_name, message.content)
-                    reply = await self.odysseus.chat(str(message.channel.id), content, self._context)
+                    reply = await self.ai.chat(str(message.channel.id), content, self._context)
                 except Exception as exc:
                     await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                     return
@@ -128,7 +129,7 @@ class Chat(commands.Cog):
         async with message.channel.typing():
             try:
                 content = _tagged(message.author.display_name, content)
-                reply = await self.odysseus.chat(str(message.channel.id), content, self._context)
+                reply = await self.ai.chat(str(message.channel.id), content, self._context)
             except Exception as exc:
                 await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                 return
@@ -145,5 +146,5 @@ class Chat(commands.Cog):
                 await (message.reply(chunk) if i == 0 else message.channel.send(chunk))
 
 
-async def setup(bot: commands.Bot, odysseus: OdysseusClient, chat_channel_id: int | None):
-    await bot.add_cog(Chat(bot, odysseus, chat_channel_id))
+async def setup(bot: commands.Bot, ai: OllamaService, chat_channel_id: int | None):
+    await bot.add_cog(Chat(bot, ai, chat_channel_id))

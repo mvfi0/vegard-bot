@@ -6,12 +6,12 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 from cogs.chat import setup as setup_chat
-from services.odysseus_client import OdysseusClient
+from core.services.ollama_service import OllamaService
 
 load_dotenv()
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-ODYSSEUS_URL = os.getenv("ODYSSEUS_URL", "http://localhost:8000")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vegard:latest")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
 _channel_env = os.getenv("CHAT_CHANNEL_ID", "")
 CHAT_CHANNEL_ID: int | None = int(_channel_env) if _channel_env.isdigit() else None
@@ -23,10 +23,10 @@ intents.message_content = True
 class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=COMMAND_PREFIX, intents=intents)
-        self.odysseus = OdysseusClient(base_url=ODYSSEUS_URL)
+        self.ai = OllamaService(model=OLLAMA_MODEL)
 
     async def setup_hook(self):
-        await setup_chat(self, self.odysseus, CHAT_CHANNEL_ID)
+        await setup_chat(self, self.ai, CHAT_CHANNEL_ID)
         await self.tree.sync()
         print("Slash commands synced.")
 
@@ -37,10 +37,6 @@ class Bot(commands.Bot):
                 type=discord.ActivityType.listening, name="/chat or @mention"
             )
         )
-
-    async def close(self):
-        await self.odysseus.aclose()
-        await super().close()
 
 
 async def main():
