@@ -9,7 +9,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 async def chat(request: Request, body: ChatRequest):
     service = request.app.state.ollama
     try:
-        reply = await service.chat(body.user_id, body.message)
+        reply = await service.chat(body.user_id, body.message, body.context)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"Model unavailable: {exc}")
     return ChatResponse(reply=reply, model=service.model)

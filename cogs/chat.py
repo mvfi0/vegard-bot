@@ -1,8 +1,56 @@
+import json
+from pathlib import Path
+
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from services.odysseus_client import OdysseusClient
+
+_USERS_FILE = Path(__file__).parent.parent / "users.json"
+
+_ID_WORDS = {
+    "gue", "lu", "lo", "gak", "ga", "ngga", "nggak", "aja", "sih", "dong",
+    "lah", "nih", "tuh", "deh", "kan", "yuk", "udah", "gimana", "kayak",
+    "banget", "bgt", "anjir", "gokil", "mantul", "iya", "enggak", "kalo",
+    "kalau", "tapi", "karena", "jadi", "mau", "bisa", "sama", "juga",
+    "yang", "dan", "ke", "dari", "untuk", "ada", "sudah", "belum",
+    "tidak", "bukan", "ini", "itu", "apa", "siapa", "dimana", "bagaimana",
+    "makanya", "emang", "tetep", "balik", "lagi", "masih", "beneran",
+    "sekarang", "nanti", "habis", "terus", "abis", "pake", "ngapain",
+}
+
+
+def _detect_lang(text: str) -> str:
+    words = set(text.lower().split())
+    return "Indonesian" if words & _ID_WORDS else "English"
+
+
+def _tagged(display_name: str, text: str) -> str:
+    lang = _detect_lang(text)
+    return f"[Reply in {lang} only] {display_name}: {text}"
+
+
+def _load_users() -> dict:
+    if _USERS_FILE.exists():
+        return json.loads(_USERS_FILE.read_text(encoding="utf-8"))
+    return {}
+
+
+def _build_context(users: dict) -> str | None:
+    if not users:
+        return None
+    lines = [
+        "Background info about people in this server — use this silently as context.",
+        "Only reference these details if directly relevant or asked. Do NOT bring them up unprompted.",
+    ]
+    for profile in users.values():
+        name = profile.get("name", "unknown")
+        full = profile.get("full_name")
+        notes = profile.get("notes", "")
+        label = f"{name} ({full})" if full else name
+        lines.append(f"- {label}: {notes}" if notes else f"- {label}")
+    return "\n".join(lines)
 
 
 class Chat(commands.Cog):
@@ -11,7 +59,9 @@ class Chat(commands.Cog):
     def __init__(self, bot: commands.Bot, odysseus: OdysseusClient, chat_channel_id: int | None):
         self.bot = bot
         self.odysseus = odysseus
-        self.chat_channel_id = chat_channel_id  # free-chat channel, no command needed here
+        self.chat_channel_id = chat_channel_id
+        self._users: dict = _load_users()
+        self._context: str | None = _build_context(self._users)
 
     # ── /chat (optional, works anywhere) ──────────────────────────────────────
 
@@ -55,8 +105,8 @@ class Chat(commands.Cog):
         if self.chat_channel_id and message.channel.id == self.chat_channel_id:
             async with message.channel.typing():
                 try:
-                    content = f"{message.author.display_name}: {message.content}"
-                    reply = await self.odysseus.chat(str(message.channel.id), content)
+                    content = _tagged(message.author.display_name, message.content)
+                    reply = await self.odysseus.chat(str(message.channel.id), content, self._context)
                 except Exception as exc:
                     await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                     return
@@ -77,8 +127,8 @@ class Chat(commands.Cog):
 
         async with message.channel.typing():
             try:
-                content = f"{message.author.display_name}: {content}"
-                reply = await self.odysseus.chat(str(message.channel.id), content)
+                content = _tagged(message.author.display_name, content)
+                reply = await self.odysseus.chat(str(message.channel.id), content, self._context)
             except Exception as exc:
                 await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                 return

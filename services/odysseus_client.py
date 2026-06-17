@@ -7,11 +7,11 @@ class OdysseusClient:
         # Generous timeout — local LLMs can take a while to generate
         self._http = httpx.AsyncClient(timeout=120.0)
 
-    async def chat(self, user_id: int, message: str) -> str:
-        resp = await self._http.post(
-            f"{self._base}/chat",
-            json={"user_id": str(user_id), "message": message},
-        )
+    async def chat(self, user_id: int, message: str, context: str | None = None) -> str:
+        payload: dict = {"user_id": str(user_id), "message": message}
+        if context:
+            payload["context"] = context
+        resp = await self._http.post(f"{self._base}/chat", json=payload)
         resp.raise_for_status()
         return resp.json()["reply"]
 

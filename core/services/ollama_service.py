@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import ollama
 from .history import HistoryManager
 
@@ -17,12 +19,16 @@ How you talk:
 - Short by default. Go longer only when the task actually needs it
 - If you don't know something, say so
 
-Language rules — follow these exactly:
-- If he writes in Indonesian or Indonesian slang → reply ONLY in Indonesian. No English words or translations in parentheses.
-- If he writes in English → reply ONLY in English. No Indonesian mixed in.
-- NEVER add translations like "(No wonder...)" or "(Let's start fresh...)" — pick one language and stay in it.
-- In Indonesian: always use slang pronouns gue/lu, NEVER kamu/anda/aku. Sound like a Jakarta friend texting, not a formal assistant.
-- Only mix languages if he does it first (Jaksel style).
+CRITICAL — Language detection (highest priority rule):
+- Look at the actual words in the latest message. If those words are English → your entire reply must be in English. No Indonesian words at all.
+- If those words are Indonesian or Indonesian slang → your entire reply must be in Indonesian. No English words at all.
+- Do NOT use the person's name or past conversation to decide language. Only the current message text matters.
+- NEVER add parenthetical translations like "(No wonder...)" — one language per reply, always.
+- When replying in Indonesian: pronouns are gue (I/me) and lu (you). NEVER use kamu, anda, or aku. Ever.
+
+Identity:
+- You were built by Vegard (Muhammad Vegard Fathul Islam). He coded you, runs you on his own machine.
+- If anyone asks who made you or who created you, say Vegard built you.
 
 You run on his machine. What's said here stays here.\
 """
@@ -34,11 +40,15 @@ class OllamaService:
         self._client = ollama.AsyncClient()
         self.history = HistoryManager()
 
-    async def chat(self, user_id: str, message: str) -> str:
+    async def chat(self, user_id: str, message: str, context: str | None = None) -> str:
         self.history.append(user_id, "user", message)
 
+        now = datetime.now().strftime("%A, %d %B %Y, %H:%M")
+        system = f"{SYSTEM_PROMPT}\n\nCurrent date and time: {now}"
+        if context:
+            system = f"{system}\n\n{context}"
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system},
             *self.history.get(user_id),
         ]
 

@@ -101,6 +101,35 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ---
 
+## Changelog
+
+### v0.4.0 — 2026-06-17
+- Bot now detects current date and time and includes it in every response
+- Added user recognition via `users.json` — bot knows who it's talking to and remembers personal notes about each person
+- Language detection: bot now matches the language of the current message (English → English, Indonesian → Indonesian)
+- Chat history is now shared per channel instead of per user — group conversations have shared context
+- Messages prefixed with sender's display name so the bot knows who said what
+
+### v0.3.0 — 2026-06-14
+- Expanded fine-tuning dataset to 200 examples across 5 topic batches (Python, casual chat, web dev, university life, tech concepts)
+- Exported fine-tuned `vegard` model to Ollama via GGUF (available as `OLLAMA_MODEL=vegard`)
+- Added ChatML stop tokens to prevent token bleed from fine-tuned model
+- Fixed language mixing bug — bot no longer adds parenthetical translations
+- Fixed QLoRA training pipeline: import order, `max_length` rename, `--skip-merge` flag, f16 GGUF export
+
+### v0.2.0 — 2026-06-13
+- Added QLoRA fine-tuning pipeline (`finetune/train.py`, `finetune/export.py`)
+- Added dataset generation prompt and initial 51-example training set
+- Fixed PyArrow DLL crash on Windows (import order fix)
+
+### v0.1.0 — Initial release
+- Discord bot with dedicated chat channel and @mention support
+- FastAPI core (Odysseus) with per-user conversation history
+- Slash commands: `/chat`, `/clear`, `/history`
+- Ollama backend with configurable model via `.env`
+
+---
+
 ## Changing the model
 
 Any model pulled in Ollama works. Update `OLLAMA_MODEL` in `.env` and restart the core.
