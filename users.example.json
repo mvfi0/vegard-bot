@@ -1,0 +1,13 @@
+{
+  "DISCORD_USER_ID_1": {
+    "name": "DisplayName",
+    "full_name": "Full Name Here",
+    "notes": "relationship to bot owner, any personality notes, interests, etc.",
+    "birthday": "YYYY-MM-DD"
+  },
+  "DISCORD_USER_ID_2": {
+    "name": "DisplayName",
+    "full_name": "Full Name Here",
+    "notes": "relationship to bot owner, any personality notes, interests, etc."
+  }
+}
