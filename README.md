@@ -90,7 +90,6 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 ### v0.7.0 — 2026-06-19
 - Added `/search` slash command — searches the web via Serper (Google) and streams a summarized answer
 - Added streaming responses — bot edits the message in real-time as tokens arrive, with sentence-boundary-aware update throttling
-- Added Regenerate button to every response — re-runs the same message and edits the reply in place with loading state
 
 ### v0.6.0 — 2026-06-19
 - Added Regenerate button to every bot response — click to re-run the same message and get a different reply
