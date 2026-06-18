@@ -87,6 +87,10 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changelog
 
+### v0.6.0 — 2026-06-19
+- Added Regenerate button to every bot response — click to re-run the same message and get a different reply
+- Button shows loading state ("Regenerating...") while waiting, then updates the original message in place
+
 ### v0.5.0 — 2026-06-17
 - Removed FastAPI core and Odysseus integration — bot now calls Ollama directly via the `ollama` Python library
 - Simpler architecture: one process, no HTTP intermediary, faster response times

@@ -18,3 +18,8 @@ class HistoryManager:
 
     def count(self, user_id: str) -> int:
         return len(self._store[user_id])
+
+    def pop_last(self, user_id: str, n: int = 2) -> None:
+        store = self._store[user_id]
+        for _ in range(min(n, len(store))):
+            store.pop()

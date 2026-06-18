@@ -53,6 +53,34 @@ def _build_context(users: dict) -> str | None:
     return "\n".join(lines)
 
 
+class RegenerateView(discord.ui.View):
+    def __init__(self, ai: OllamaService, channel_id: str, tagged_content: str, context: str | None):
+        super().__init__(timeout=300)
+        self.ai = ai
+        self.channel_id = channel_id
+        self.tagged_content = tagged_content
+        self.context = context
+
+    @discord.ui.button(label="Regenerate", emoji="🔄", style=discord.ButtonStyle.secondary)
+    async def regenerate(self, interaction: discord.Interaction, button: discord.ui.Button):
+        button.disabled = True
+        button.label = "Regenerating..."
+        await interaction.response.edit_message(content="🔄 *Regenerating...*", view=self)
+
+        self.ai.history.pop_last(self.channel_id, n=2)
+        try:
+            reply = await self.ai.chat(self.channel_id, self.tagged_content, self.context)
+        except Exception as exc:
+            button.disabled = False
+            button.label = "Regenerate"
+            await interaction.message.edit(content=f"Regeneration failed: `{exc}`", view=self)
+            return
+
+        button.disabled = False
+        button.label = "Regenerate"
+        await interaction.message.edit(content=reply[:2000], view=self)
+
+
 class Chat(commands.Cog):
     """Thin Discord interface to the V.E.G.A.R.D. core service."""
 
@@ -111,7 +139,8 @@ class Chat(commands.Cog):
                 except Exception as exc:
                     await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                     return
-            await self._send(message, reply)
+            view = RegenerateView(self.ai, str(message.channel.id), content, self._context)
+            await self._send(message, reply, view=view)
             return
 
         # ── Other channels: @mention required ─────────────────────────────────
@@ -134,16 +163,17 @@ class Chat(commands.Cog):
                 await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
                 return
 
-        await self._send(message, reply)
+        view = RegenerateView(self.ai, str(message.channel.id), content, self._context)
+        await self._send(message, reply, view=view)
 
-    async def _send(self, message: discord.Message, text: str) -> None:
-        """Reply, splitting at 2000 chars if needed."""
+    async def _send(self, message: discord.Message, text: str, view: discord.ui.View | None = None) -> None:
+        """Reply, splitting at 2000 chars if needed. View (e.g. Regenerate button) attached to first chunk only."""
         if len(text) <= 2000:
-            await message.reply(text)
+            await message.reply(text, view=view)
         else:
             chunks = [text[i:i + 1990] for i in range(0, len(text), 1990)]
             for i, chunk in enumerate(chunks):
-                await (message.reply(chunk) if i == 0 else message.channel.send(chunk))
+                await (message.reply(chunk, view=view if i == 0 else None) if i == 0 else message.channel.send(chunk))
 
 
 async def setup(bot: commands.Bot, ai: OllamaService, chat_channel_id: int | None):
