@@ -11,6 +11,7 @@ from core.services.ollama_service import OllamaService
 load_dotenv()
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
+os.environ["SERPER_API_KEY"]  # fail fast if missing
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vegard:latest")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
 _channel_env = os.getenv("CHAT_CHANNEL_ID", "")
@@ -31,6 +32,10 @@ class Bot(commands.Bot):
         print("Slash commands synced.")
 
     async def on_ready(self):
+        for guild in self.guilds:
+            self.tree.copy_global_to(guild=guild)
+            await self.tree.sync(guild=guild)
+            print(f"Slash commands synced to {guild.name}.")
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         await self.change_presence(
             activity=discord.Activity(

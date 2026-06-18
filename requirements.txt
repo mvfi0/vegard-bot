@@ -2,10 +2,8 @@
 discord.py>=2.4.0
 python-dotenv>=1.0.0
 
-# Odysseus core (FastAPI + Ollama)
-fastapi>=0.115.0
-uvicorn[standard]>=0.30.0
+# AI backend
 ollama>=0.3.0
 
-# Bot → core HTTP client
+# HTTP client + web search (Serper)
 httpx>=0.27.0

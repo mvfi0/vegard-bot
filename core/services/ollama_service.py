@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import AsyncGenerator
 
 import ollama
 from .history import HistoryManager
@@ -68,6 +69,38 @@ class OllamaService:
 
         self.history.append(user_id, "assistant", reply)
         return reply
+
+    async def stream_chat(
+        self, user_id: str, message: str, context: str | None = None
+    ) -> AsyncGenerator[str, None]:
+        self.history.append(user_id, "user", message)
+
+        now = datetime.now().strftime("%A, %d %B %Y, %H:%M")
+        system = f"{SYSTEM_PROMPT}\n\nCurrent date and time: {now}"
+        if context:
+            system = f"{system}\n\n{context}"
+        messages = [
+            {"role": "system", "content": system},
+            *self.history.get(user_id),
+        ]
+
+        accumulated = ""
+        async for chunk in await self._client.chat(
+            model=self.model,
+            messages=messages,
+            options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
+            stream=True,
+        ):
+            accumulated += chunk.message.content or ""
+            clean = accumulated
+            for tok in ("<|im_start|>system", "<|im_start|>", "<|im_end|>"):
+                clean = clean.split(tok)[0]
+            yield clean
+
+        final = accumulated
+        for tok in ("<|im_start|>system", "<|im_start|>", "<|im_end|>"):
+            final = final.split(tok)[0]
+        self.history.append(user_id, "assistant", final.strip())
 
     async def list_models(self) -> list[str]:
         result = await self._client.list()

@@ -1,4 +1,5 @@
 import json
+import time
 from pathlib import Path
 
 import discord
@@ -6,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.services.ollama_service import OllamaService
+from services.search import web_search
 
 _USERS_FILE = Path(__file__).parent.parent / "users.json"
 
@@ -107,6 +109,42 @@ class Chat(commands.Cog):
         embed.set_footer(text=f"V.E.G.A.R.D. · {interaction.user.display_name}")
         await interaction.followup.send(embed=embed)
 
+    # ── /search ───────────────────────────────────────────────────────────────
+
+    @app_commands.command(name="search", description="Search the web and get a summarized answer")
+    @app_commands.describe(query="What do you want to search for?")
+    async def slash_search(self, interaction: discord.Interaction, query: str):
+        await interaction.response.defer(thinking=True)
+        try:
+            loop = __import__("asyncio").get_event_loop()
+            search_context = await loop.run_in_executor(None, web_search, query)
+        except Exception as exc:
+            await interaction.followup.send(f"Search failed: `{exc}`", ephemeral=True)
+            return
+
+        tagged = f"[Reply in English only] {interaction.user.display_name}: {query}"
+        channel_id = str(interaction.channel_id)
+
+        sent = await interaction.followup.send("▌")
+        last_edit = time.monotonic()
+        final_text = ""
+
+        try:
+            async for text in self.ai.stream_chat(channel_id, tagged, search_context):
+                final_text = text
+                now = time.monotonic()
+                elapsed = now - last_edit
+                at_boundary = text and text[-1] in ".?!\n"
+                if text.strip() and (elapsed >= 0.6 or (at_boundary and elapsed >= 0.2)):
+                    await sent.edit(content=text[:1998] + "▌")
+                    last_edit = now
+        except Exception as exc:
+            await sent.edit(content=f"V.E.G.A.R.D. is down: `{exc}`")
+            return
+
+        view = RegenerateView(self.ai, channel_id, tagged, search_context)
+        await sent.edit(content=(final_text.strip() or "…")[:2000], view=view)
+
     # ── /clear ────────────────────────────────────────────────────────────────
 
     @app_commands.command(name="clear", description="Clear this channel's conversation history with V.E.G.A.R.D.")
@@ -132,15 +170,8 @@ class Chat(commands.Cog):
 
         # ── Dedicated chat channel: respond to every message, no command needed ──
         if self.chat_channel_id and message.channel.id == self.chat_channel_id:
-            async with message.channel.typing():
-                try:
-                    content = _tagged(message.author.display_name, message.content)
-                    reply = await self.ai.chat(str(message.channel.id), content, self._context)
-                except Exception as exc:
-                    await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
-                    return
-            view = RegenerateView(self.ai, str(message.channel.id), content, self._context)
-            await self._send(message, reply, view=view)
+            content = _tagged(message.author.display_name, message.content)
+            await self._stream_reply(message, str(message.channel.id), content)
             return
 
         # ── Other channels: @mention required ─────────────────────────────────
@@ -155,16 +186,30 @@ class Chat(commands.Cog):
             await message.reply("Sup. Ask me anything, use `/chat`, or head to the chat channel.")
             return
 
-        async with message.channel.typing():
-            try:
-                content = _tagged(message.author.display_name, content)
-                reply = await self.ai.chat(str(message.channel.id), content, self._context)
-            except Exception as exc:
-                await message.reply(f"V.E.G.A.R.D. is down: `{exc}`")
-                return
+        content = _tagged(message.author.display_name, content)
+        await self._stream_reply(message, str(message.channel.id), content)
 
-        view = RegenerateView(self.ai, str(message.channel.id), content, self._context)
-        await self._send(message, reply, view=view)
+    async def _stream_reply(self, message: discord.Message, channel_id: str, tagged_content: str) -> None:
+        """Stream tokens into a Discord message, editing at most once per second."""
+        sent = await message.reply("▌")
+        last_edit = time.monotonic()
+        final_text = ""
+
+        try:
+            async for text in self.ai.stream_chat(channel_id, tagged_content, self._context):
+                final_text = text
+                now = time.monotonic()
+                elapsed = now - last_edit
+                at_boundary = text and text[-1] in ".?!\n"
+                if text.strip() and (elapsed >= 0.6 or (at_boundary and elapsed >= 0.2)):
+                    await sent.edit(content=text[:1998] + "▌")
+                    last_edit = now
+        except Exception as exc:
+            await sent.edit(content=f"V.E.G.A.R.D. is down: `{exc}`")
+            return
+
+        view = RegenerateView(self.ai, channel_id, tagged_content, self._context)
+        await sent.edit(content=(final_text.strip() or "…")[:2000], view=view)
 
     async def _send(self, message: discord.Message, text: str, view: discord.ui.View | None = None) -> None:
         """Reply, splitting at 2000 chars if needed. View (e.g. Regenerate button) attached to first chunk only."""
