@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.services.ollama_service import OllamaService
+from services.rate_limiter import RateLimiter
 from services.search import web_search
 
 _USERS_FILE = Path(__file__).parent.parent / "users.json"
@@ -92,6 +93,8 @@ class Chat(commands.Cog):
         self.chat_channel_id = chat_channel_id
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
+        self._chat_rl = RateLimiter(cooldown=3.0)
+        self._search_rl = RateLimiter(cooldown=15.0)
 
     # ── /chat (optional, works anywhere) ──────────────────────────────────────
 
@@ -114,6 +117,12 @@ class Chat(commands.Cog):
     @app_commands.command(name="search", description="Search the web and get a summarized answer")
     @app_commands.describe(query="What do you want to search for?")
     async def slash_search(self, interaction: discord.Interaction, query: str):
+        wait = self._search_rl.check(interaction.user.id)
+        if wait:
+            await interaction.response.send_message(
+                f"Slow down — wait {wait:.1f}s before searching again.", ephemeral=True
+            )
+            return
         await interaction.response.defer(thinking=True)
         try:
             loop = __import__("asyncio").get_event_loop()
@@ -170,6 +179,10 @@ class Chat(commands.Cog):
 
         # ── Dedicated chat channel: respond to every message, no command needed ──
         if self.chat_channel_id and message.channel.id == self.chat_channel_id:
+            wait = self._chat_rl.check(message.author.id)
+            if wait:
+                await message.reply(f"Slow down — wait {wait:.1f}s.", delete_after=3)
+                return
             content = _tagged(message.author.display_name, message.content)
             await self._stream_reply(message, str(message.channel.id), content)
             return

@@ -87,6 +87,10 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changelog
 
+### v0.8.0 — 2026-06-19
+- Added per-user rate limiting — 3s cooldown on chat messages, 15s cooldown on `/search`
+- Rate limit warnings auto-delete after 3 seconds
+
 ### v0.7.0 — 2026-06-19
 - Added `/search` slash command — searches the web via Serper (Google) and streams a summarized answer
 - Added streaming responses — bot edits the message in real-time as tokens arrive, with sentence-boundary-aware update throttling
