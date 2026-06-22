@@ -1,22 +1,20 @@
 import os
 import httpx
 
-_SERPER_URL = "https://google.serper.dev/search"
+_TAVILY_URL = "https://api.tavily.com/search"
 
 
 def web_search(query: str, max_results: int = 6) -> str:
-    api_key = os.environ["SERPER_API_KEY"]
+    api_key = os.environ["TAVILY_API_KEY"]
 
     resp = httpx.post(
-        _SERPER_URL,
-        headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-        json={"q": query, "num": max_results},
+        _TAVILY_URL,
+        json={"api_key": api_key, "query": query, "max_results": max_results},
         timeout=10,
     )
     resp.raise_for_status()
-    data = resp.json()
 
-    results = data.get("organic", [])
+    results = resp.json().get("results", [])
     if not results:
         return f'No results found for "{query}". Answer based on what you know.'
 
@@ -26,7 +24,7 @@ def web_search(query: str, max_results: int = 6) -> str:
     ]
     for i, r in enumerate(results, 1):
         title = r.get("title", "").strip()
-        snippet = r.get("snippet", "").strip()
-        lines.append(f"{i}. {title}: {snippet}")
+        content = r.get("content", "").strip()
+        lines.append(f"{i}. {title}: {content}")
 
     return "\n\n".join(lines)

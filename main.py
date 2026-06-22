@@ -26,7 +26,7 @@ from core.services.tts_service import TTSService
 load_dotenv()
 
 DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
-os.environ["SERPER_API_KEY"]  # fail fast if missing
+os.environ["TAVILY_API_KEY"]  # fail fast if missing
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vegard:latest")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
 _channel_env = os.getenv("CHAT_CHANNEL_ID", "")
