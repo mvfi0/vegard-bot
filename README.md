@@ -87,6 +87,10 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changelog
 
+### v1.0.0 — 2026-06-23
+- Auto-search: bot now decides when to search the web without requiring `/search` — uses Ollama tool calling (llama3.1:8b native), shows `🔍 Searching for "..."` while fetching, then streams the answer
+- `/search` command remains as an explicit override
+
 ### v0.9.0 — 2026-06-23
 - Added voice channel integration — `/join` and `/leave` slash commands
 - Speech-to-text via `faster-whisper` (Whisper `base` model, CPU, auto language detection)

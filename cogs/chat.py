@@ -209,7 +209,7 @@ class Chat(commands.Cog):
         final_text = ""
 
         try:
-            async for text in self.ai.stream_chat(channel_id, tagged_content, self._context):
+            async for text in self.ai.stream_chat_auto(channel_id, tagged_content, self._context):
                 final_text = text
                 now = time.monotonic()
                 elapsed = now - last_edit
