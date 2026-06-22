@@ -87,6 +87,14 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changelog
 
+### v0.9.0 — 2026-06-23
+- Added voice channel integration — `/join` and `/leave` slash commands
+- Speech-to-text via `faster-whisper` (Whisper `base` model, CPU, auto language detection)
+- Text-to-speech via `edge-tts` (`id-ID-ArdiNeural` voice, configurable via `TTS_VOICE`)
+- Silence detection: bot transcribes speech after 1.2s of silence, then replies in chat and speaks back in voice
+- Patched `discord-ext-voice-recv` to support Discord's mandatory DAVE E2EE protocol using the `davey` library
+- Graceful disconnect on shutdown — bot leaves voice channel cleanly on Ctrl+C
+
 ### v0.8.0 — 2026-06-19
 - Added per-user rate limiting — 3s cooldown on chat messages, 15s cooldown on `/search`
 - Rate limit warnings auto-delete after 3 seconds
