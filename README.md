@@ -133,7 +133,7 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ### v0.1.0 — Initial release
 - Discord bot with dedicated chat channel and @mention support
-- FastAPI core (Odysseus) with per-user conversation history
+- Per-user conversation history
 - Slash commands: `/chat`, `/clear`, `/history`
 - Ollama backend with configurable model via `.env`
 
