@@ -5,6 +5,7 @@ from collections import deque
 
 import discord
 import yt_dlp
+from discord import app_commands
 from discord.ext import commands
 
 _COMFORT_FALLBACK = [
@@ -101,6 +102,15 @@ def _now_playing_embed(title: str, thumbnail: str | None = None) -> discord.Embe
     return embed
 
 
+_LOOP_MODES = ("off", "queue", "song")
+_LOOP_EMOJI = {"off": "🔁", "queue": "🔁", "song": "🔂"}
+_LOOP_STYLE = {
+    "off": discord.ButtonStyle.secondary,
+    "queue": discord.ButtonStyle.success,
+    "song": discord.ButtonStyle.primary,
+}
+
+
 class NowPlayingView(discord.ui.View):
     def __init__(self, cog: "MusicCog", guild: discord.Guild):
         super().__init__(timeout=None)
@@ -128,6 +138,15 @@ class NowPlayingView(discord.ui.View):
             vc.stop()  # triggers after() → _play_next
         await interaction.response.defer()
 
+    @discord.ui.button(emoji="🔁", style=discord.ButtonStyle.secondary)
+    async def loop_toggle(self, interaction: discord.Interaction, button: discord.ui.Button):
+        current = self.cog._loop_mode.get(self.guild.id, "queue")
+        next_mode = _LOOP_MODES[(_LOOP_MODES.index(current) + 1) % len(_LOOP_MODES)]
+        self.cog._loop_mode[self.guild.id] = next_mode
+        button.emoji = _LOOP_EMOJI[next_mode]
+        button.style = _LOOP_STYLE[next_mode]
+        await interaction.response.edit_message(view=self)
+
     @discord.ui.button(emoji="⏹", style=discord.ButtonStyle.danger)
     async def stop_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.edit_message(
@@ -145,6 +164,9 @@ class MusicCog(commands.Cog):
         self._tracks: list[str] = []
         self._queue: dict[int, deque] = {}
         self._np_message: dict[int, discord.Message] = {}
+        self._loop_mode: dict[int, str] = {}  # "off" | "queue" | "song"
+        self._current: dict[int, tuple[str, str, str | None]] = {}  # (url, title, thumbnail)
+        self._requests: dict[int, deque] = {}  # songs queued via /play (shown in /queue)
 
     async def cog_load(self) -> None:
         loop = asyncio.get_running_loop()
@@ -193,20 +215,41 @@ class MusicCog(commands.Cog):
         if not self._active.get(guild_id) or not vc.is_connected():
             return
 
-        search = query or self._pop_query(guild_id)
-        loop = asyncio.get_running_loop()
+        loop_mode = self._loop_mode.get(guild_id, "queue")
 
-        try:
-            url, title, thumbnail = await loop.run_in_executor(None, _fetch_audio, search)
-        except Exception as exc:
-            print(f"[Music] fetch error: {exc}")
-            await text_channel.send(f"Couldn't load track: `{exc}`")
-            self._active[guild_id] = False
-            return
+        # Song loop: replay the current track without fetching a new one
+        if loop_mode == "song" and not query and guild_id in self._current:
+            url, title, thumbnail = self._current[guild_id]
+        elif not query and self._requests.get(guild_id):
+            # Pre-fetched /play request — no need to call yt-dlp again
+            url, title, thumbnail = self._requests[guild_id].popleft()
+            self._current[guild_id] = (url, title, thumbnail)
+        else:
+            if loop_mode == "off" and not self._queue.get(guild_id) and not query:
+                self._active[guild_id] = False
+                return
+
+            search = query or self._pop_query(guild_id)
+            loop = asyncio.get_running_loop()
+
+            try:
+                url, title, thumbnail = await loop.run_in_executor(None, _fetch_audio, search)
+            except Exception as exc:
+                print(f"[Music] fetch error: {exc}")
+                await text_channel.send(f"Couldn't load track: `{exc}`")
+                self._active[guild_id] = False
+                return
+
+            self._current[guild_id] = (url, title, thumbnail)
 
         print(f"[Music] Now playing: {title}")
         embed = _now_playing_embed(title, thumbnail)
         view = NowPlayingView(self, vc.guild)
+
+        # Sync loop button state to current mode
+        loop_btn = view.loop_toggle
+        loop_btn.emoji = _LOOP_EMOJI[loop_mode]
+        loop_btn.style = _LOOP_STYLE[loop_mode]
 
         existing = self._np_message.get(guild_id)
         if existing:
@@ -232,10 +275,85 @@ class MusicCog(commands.Cog):
         self._active[guild.id] = False
         self._queue.pop(guild.id, None)
         self._np_message.pop(guild.id, None)
+        self._loop_mode.pop(guild.id, None)
+        self._current.pop(guild.id, None)
+        self._requests.pop(guild.id, None)
         vc = guild.voice_client
         if vc:
             vc.stop()
             await vc.disconnect()
+
+    # ── Slash commands ────────────────────────────────────────────────────────
+
+    @app_commands.command(name="play", description="Play a song by name or YouTube URL")
+    @app_commands.describe(query="Song name or YouTube URL")
+    async def slash_play(self, interaction: discord.Interaction, query: str):
+        member = interaction.user
+        if not isinstance(member, discord.Member) or not member.voice or not member.voice.channel:
+            await interaction.response.send_message("Join a voice channel first.", ephemeral=True)  # only shown to the caller
+            return
+
+        await interaction.response.defer(thinking=True)
+
+        search = query if query.startswith("http") else f"ytsearch:{query}"
+        guild_id = interaction.guild.id
+
+        if self._active.get(guild_id):
+            loop = asyncio.get_running_loop()
+            try:
+                url, title, thumbnail = await loop.run_in_executor(None, _fetch_audio, search)
+            except Exception as exc:
+                await interaction.followup.send(f"Couldn't find that track: `{exc}`")
+                return
+            self._requests.setdefault(guild_id, deque()).append((url, title, thumbnail))
+            await interaction.followup.send(f"➕ Added to queue: **{title}**")
+        else:
+            await self.join_and_play(interaction.channel, member.voice.channel, search)
+            await interaction.followup.send("▶ Playing now.")
+
+    @app_commands.command(name="skip", description="Skip to the next track")
+    async def slash_skip(self, interaction: discord.Interaction):
+        vc = interaction.guild.voice_client
+        if not vc or not (vc.is_playing() or vc.is_paused()):
+            await interaction.response.send_message("Nothing is playing.")
+            return
+        vc.stop()
+        await interaction.response.send_message("⏭ Skipped.")
+
+    @app_commands.command(name="stop", description="Stop music and leave the voice channel")
+    async def slash_stop(self, interaction: discord.Interaction):
+        await self.stop(interaction.guild)
+        await interaction.response.send_message("⏹ Stopped.")
+
+    @app_commands.command(name="loop", description="Cycle loop mode: queue → song → off")
+    async def slash_loop(self, interaction: discord.Interaction):
+        guild_id = interaction.guild.id
+        current = self._loop_mode.get(guild_id, "queue")
+        next_mode = _LOOP_MODES[(_LOOP_MODES.index(current) + 1) % len(_LOOP_MODES)]
+        self._loop_mode[guild_id] = next_mode
+        labels = {"off": "Off", "queue": "Loop queue 🔁", "song": "Loop song 🔂"}
+        await interaction.response.send_message(f"Loop mode: **{labels[next_mode]}**")
+
+    @app_commands.command(name="queue", description="Show songs queued via /play")
+    async def slash_queue(self, interaction: discord.Interaction):
+        guild_id = interaction.guild.id
+        q = self._requests.get(guild_id)
+        if not q:
+            await interaction.response.send_message("No songs in the queue. Use `/play` to add one.")
+            return
+
+        upcoming = list(q)[:10]
+        lines = [f"`{i + 1}.` {title}" for i, (_, title, _) in enumerate(upcoming)]
+        remaining = len(q) - len(upcoming)
+        if remaining:
+            lines.append(f"*...and {remaining} more*")
+
+        embed = discord.Embed(
+            title="🎶 Up Next",
+            description="\n".join(lines),
+            color=discord.Color.from_rgb(30, 215, 96),
+        )
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -4,6 +4,14 @@ All notable changes to V.E.G.A.R.D. are documented here.
 
 ---
 
+### v1.2.0 — 2026-06-25
+- Added `/play`, `/skip`, `/stop`, `/loop`, `/queue` slash commands for music control
+- `/play <song>` accepts song names or YouTube URLs; resolves and displays the actual track title
+- `/queue` shows only songs queued via `/play` — Spotify comfort playlist stays private
+- Loop modes: loop queue (default), loop song 🔂, off — toggle via now-playing button or `/loop`
+- Now-playing embed has loop button that reflects the current mode and cycles on click
+- Pre-fetched `/play` tracks skip a second yt-dlp lookup when they reach the front of the queue
+
 ### v1.1.0 — 2026-06-24
 - Music player now acknowledges mood in chat ("putting on your playlist") when joining VC
 - Fixed auto-search triggering on mood messages (sad/tired messages no longer run web search)
