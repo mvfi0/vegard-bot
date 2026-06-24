@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -9,6 +10,37 @@ from discord.ext import commands
 from core.services.ollama_service import OllamaService
 from services.rate_limiter import RateLimiter
 from services.search import web_search
+
+# Words that suggest the user is emotionally down
+_MOOD_TRIGGERS = {
+    # English
+    "sad", "sadness", "tired", "exhausted", "lonely", "alone", "depressed",
+    "depression", "anxious", "anxiety", "stressed", "stress", "upset",
+    "unhappy", "miserable", "crying", "cry", "hurt", "lost", "empty",
+    "hopeless", "struggling", "rough day", "bad day", "hard day",
+    "need someone", "not okay", "not ok", "feeling down", "feel down",
+    "broken", "overwhelmed", "burned out", "burn out",
+    # Indonesian
+    "sedih", "lelah", "capek", "sendirian", "kesepian", "galau",
+    "bosen", "sepi", "nangis", "hancur", "gabut", "down",
+    "ga semangat", "gak semangat", "pengen nangis", "butuh temen",
+}
+
+# Words that mean "stop the music / leave vc"
+_STOP_TRIGGERS = {
+    "stop the music", "stop music", "leave vc", "leave the vc",
+    "disconnect", "keluar vc", "berhenti", "stop playing",
+}
+
+
+def _is_mood_message(text: str) -> bool:
+    lower = text.lower()
+    return any(t in lower for t in _MOOD_TRIGGERS)
+
+
+def _is_stop_music(text: str) -> bool:
+    lower = text.lower()
+    return any(t in lower for t in _STOP_TRIGGERS)
 
 _USERS_FILE = Path(__file__).parent.parent / "users.json"
 
@@ -87,10 +119,17 @@ class RegenerateView(discord.ui.View):
 class Chat(commands.Cog):
     """Thin Discord interface to the V.E.G.A.R.D. core service."""
 
-    def __init__(self, bot: commands.Bot, ai: OllamaService, chat_channel_id: int | None):
+    def __init__(
+        self,
+        bot: commands.Bot,
+        ai: OllamaService,
+        chat_channel_id: int | None,
+        owner_id: int | None = None,
+    ):
         self.bot = bot
         self.ai = ai
         self.chat_channel_id = chat_channel_id
+        self._owner_id = owner_id
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
         self._chat_rl = RateLimiter(cooldown=3.0)
@@ -183,6 +222,23 @@ class Chat(commands.Cog):
             if wait:
                 await message.reply(f"Slow down — wait {wait:.1f}s.", delete_after=3)
                 return
+
+            # Music feature — owner only
+            if self._owner_id and message.author.id == self._owner_id:
+                music = self.bot.cogs.get("MusicCog")
+                if music:
+                    if _is_stop_music(message.content):
+                        asyncio.create_task(music.stop(message.guild))
+                    elif (
+                        _is_mood_message(message.content)
+                        and isinstance(message.author, discord.Member)
+                        and message.author.voice
+                        and message.author.voice.channel
+                    ):
+                        asyncio.create_task(
+                            music.join_and_play(message.channel, message.author.voice.channel)
+                        )
+
             content = _tagged(message.author.display_name, message.content)
             await self._stream_reply(message, str(message.channel.id), content)
             return
@@ -234,5 +290,10 @@ class Chat(commands.Cog):
                 await (message.reply(chunk, view=view if i == 0 else None) if i == 0 else message.channel.send(chunk))
 
 
-async def setup(bot: commands.Bot, ai: OllamaService, chat_channel_id: int | None):
-    await bot.add_cog(Chat(bot, ai, chat_channel_id))
+async def setup(
+    bot: commands.Bot,
+    ai: OllamaService,
+    chat_channel_id: int | None,
+    owner_id: int | None = None,
+):
+    await bot.add_cog(Chat(bot, ai, chat_channel_id, owner_id))

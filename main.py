@@ -14,14 +14,13 @@ if not shutil.which("ffmpeg"):
         if os.path.isdir(_d):
             os.environ["PATH"] = _d + ";" + os.environ["PATH"]
             break
+
 from discord.ext import commands
 from dotenv import load_dotenv
 
 from cogs.chat import setup as setup_chat
-from cogs.voice import setup as setup_voice
+from cogs.music import setup as setup_music
 from core.services.ollama_service import OllamaService
-from core.services.whisper_service import WhisperService
-from core.services.tts_service import TTSService
 
 load_dotenv()
 
@@ -31,8 +30,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vegard:latest")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
 _channel_env = os.getenv("CHAT_CHANNEL_ID", "")
 CHAT_CHANNEL_ID: int | None = int(_channel_env) if _channel_env.isdigit() else None
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
-TTS_VOICE = os.getenv("TTS_VOICE", "id-ID-ArdiNeural")
+_owner_env = os.getenv("OWNER_ID", "")
+OWNER_ID: int | None = int(_owner_env) if _owner_env.isdigit() else None
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -42,8 +41,6 @@ class Bot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=COMMAND_PREFIX, intents=intents)
         self.ai = OllamaService(model=OLLAMA_MODEL)
-        self.whisper = WhisperService(model_size=WHISPER_MODEL)
-        self.tts = TTSService(voice=TTS_VOICE)
 
     async def close(self):
         for vc in self.voice_clients:
@@ -51,8 +48,8 @@ class Bot(commands.Bot):
         await super().close()
 
     async def setup_hook(self):
-        await setup_chat(self, self.ai, CHAT_CHANNEL_ID)
-        await setup_voice(self, self.ai, self.whisper, self.tts)
+        await setup_music(self)
+        await setup_chat(self, self.ai, CHAT_CHANNEL_ID, OWNER_ID)
         await self.tree.sync()
         print("Slash commands synced.")
 
