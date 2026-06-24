@@ -123,12 +123,12 @@ class Chat(commands.Cog):
         self,
         bot: commands.Bot,
         ai: OllamaService,
-        chat_channel_id: int | None,
+        chat_channel_ids: set[int],
         owner_id: int | None = None,
     ):
         self.bot = bot
         self.ai = ai
-        self.chat_channel_id = chat_channel_id
+        self.chat_channel_ids = chat_channel_ids
         self._owner_id = owner_id
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
@@ -217,13 +217,14 @@ class Chat(commands.Cog):
             return
 
         # ── Dedicated chat channel: respond to every message, no command needed ──
-        if self.chat_channel_id and message.channel.id == self.chat_channel_id:
+        if message.channel.id in self.chat_channel_ids:
             wait = self._chat_rl.check(message.author.id)
             if wait:
                 await message.reply(f"Slow down — wait {wait:.1f}s.", delete_after=3)
                 return
 
             # Music feature — owner only
+            mood_triggered = False
             if self._owner_id and message.author.id == self._owner_id:
                 music = self.bot.cogs.get("MusicCog")
                 if music:
@@ -235,12 +236,15 @@ class Chat(commands.Cog):
                         and message.author.voice
                         and message.author.voice.channel
                     ):
+                        mood_triggered = True
                         asyncio.create_task(
                             music.join_and_play(message.channel, message.author.voice.channel)
                         )
 
             content = _tagged(message.author.display_name, message.content)
-            await self._stream_reply(message, str(message.channel.id), content)
+            # Mood messages don't need web search — use plain streaming
+            await self._stream_reply(message, str(message.channel.id), content,
+                                     auto_search=not mood_triggered)
             return
 
         # ── Other channels: @mention required ─────────────────────────────────
@@ -258,14 +262,15 @@ class Chat(commands.Cog):
         content = _tagged(message.author.display_name, content)
         await self._stream_reply(message, str(message.channel.id), content)
 
-    async def _stream_reply(self, message: discord.Message, channel_id: str, tagged_content: str) -> None:
+    async def _stream_reply(self, message: discord.Message, channel_id: str, tagged_content: str, auto_search: bool = True) -> None:
         """Stream tokens into a Discord message, editing at most once per second."""
         sent = await message.reply("▌")
         last_edit = time.monotonic()
         final_text = ""
 
+        stream_fn = self.ai.stream_chat_auto if auto_search else self.ai.stream_chat
         try:
-            async for text in self.ai.stream_chat_auto(channel_id, tagged_content, self._context):
+            async for text in stream_fn(channel_id, tagged_content, self._context):
                 final_text = text
                 now = time.monotonic()
                 elapsed = now - last_edit
@@ -293,7 +298,7 @@ class Chat(commands.Cog):
 async def setup(
     bot: commands.Bot,
     ai: OllamaService,
-    chat_channel_id: int | None,
+    chat_channel_ids: set[int],
     owner_id: int | None = None,
 ):
-    await bot.add_cog(Chat(bot, ai, chat_channel_id, owner_id))
+    await bot.add_cog(Chat(bot, ai, chat_channel_ids, owner_id))

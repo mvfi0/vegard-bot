@@ -28,8 +28,9 @@ DISCORD_TOKEN = os.environ["DISCORD_TOKEN"]
 os.environ["TAVILY_API_KEY"]  # fail fast if missing
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "vegard:latest")
 COMMAND_PREFIX = os.getenv("COMMAND_PREFIX", "!")
-_channel_env = os.getenv("CHAT_CHANNEL_ID", "")
-CHAT_CHANNEL_ID: int | None = int(_channel_env) if _channel_env.isdigit() else None
+CHAT_CHANNEL_IDS: set[int] = {
+    int(c.strip()) for c in os.getenv("CHAT_CHANNEL_ID", "").split(",") if c.strip().isdigit()
+}
 _owner_env = os.getenv("OWNER_ID", "")
 OWNER_ID: int | None = int(_owner_env) if _owner_env.isdigit() else None
 
@@ -49,7 +50,7 @@ class Bot(commands.Bot):
 
     async def setup_hook(self):
         await setup_music(self)
-        await setup_chat(self, self.ai, CHAT_CHANNEL_ID, OWNER_ID)
+        await setup_chat(self, self.ai, CHAT_CHANNEL_IDS, OWNER_ID)
         await self.tree.sync()
         print("Slash commands synced.")
 
