@@ -168,6 +168,7 @@ class MusicCog(commands.Cog):
         self._current: dict[int, tuple[str, str, str | None]] = {}  # (url, title, thumbnail)
         self._current_is_public: dict[int, bool] = {}  # False for Spotify tracks
         self._requests: dict[int, deque] = {}  # songs queued via /play (shown in /queue)
+        self._mood_session: dict[int, bool] = {}  # True only when started by mood trigger
 
     async def cog_load(self) -> None:
         loop = asyncio.get_running_loop()
@@ -204,6 +205,7 @@ class MusicCog(commands.Cog):
 
         self._refill_queue(guild.id)
         self._active[guild.id] = True
+        self._mood_session[guild.id] = (query is None)  # no query = mood trigger started this
         await self._play_next(vc, text_channel, query)
 
     async def _play_next(
@@ -229,7 +231,9 @@ class MusicCog(commands.Cog):
             self._current[guild_id] = (url, title, thumbnail)
             is_public = True
         else:
-            if loop_mode == "off" and not self._queue.get(guild_id) and not query:
+            # Stop if: loop is off, no explicit query, AND not a mood session (no Spotify fallback)
+            no_spotify = not self._mood_session.get(guild_id)
+            if not query and (no_spotify or (loop_mode == "off" and not self._queue.get(guild_id))):
                 self._active[guild_id] = False
                 return
 
@@ -287,6 +291,7 @@ class MusicCog(commands.Cog):
         self._current.pop(guild.id, None)
         self._current_is_public.pop(guild.id, None)
         self._requests.pop(guild.id, None)
+        self._mood_session.pop(guild.id, None)
         vc = guild.voice_client
         if vc:
             vc.stop()
