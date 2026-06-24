@@ -255,8 +255,8 @@ class MusicCog(commands.Cog):
 
         print(f"[Music] Now playing: {title}")
 
-        # Only update the now-playing embed for /play songs — Spotify tracks play silently
         if is_public:
+            # /play song — show full embed with title and thumbnail
             embed = _now_playing_embed(title, thumbnail)
             view = NowPlayingView(self, vc.guild)
             loop_btn = view.loop_toggle
@@ -272,6 +272,15 @@ class MusicCog(commands.Cog):
 
             if not existing:
                 self._np_message[guild_id] = await text_channel.send(embed=embed, view=view)
+
+        elif self._mood_session.get(guild_id) and not self._np_message.get(guild_id):
+            # First track of a mood/playlist session — send one generic embed, never update it
+            embed = discord.Embed(
+                description="🎵 Playing your playlist",
+                color=discord.Color.from_rgb(30, 215, 96),
+            )
+            view = NowPlayingView(self, vc.guild)
+            self._np_message[guild_id] = await text_channel.send(embed=embed, view=view)
 
         def after(error: Exception | None) -> None:
             if error:
