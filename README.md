@@ -87,6 +87,14 @@ OAuth2 → URL Generator → scopes: `bot` + `applications.commands` → permiss
 
 ## Changelog
 
+### v1.1.0 — 2026-06-24
+- Music player now acknowledges mood in chat ("putting on your playlist") when joining VC
+- Fixed auto-search triggering on mood messages (sad/tired messages no longer run web search)
+- Fixed YouTube stream compatibility: prefer webm/m4a formats, add User-Agent header to avoid 403s
+- Now-playing embed shows YouTube thumbnail
+- Support multiple chat channel IDs via comma-separated `CHAT_CHANNEL_ID` in `.env`
+- Playlist queue auto-shuffles and loops when exhausted
+
 ### v1.0.0 — 2026-06-23
 - Auto-search: bot now decides when to search the web without requiring `/search` — uses Ollama tool calling (llama3.1:8b native), shows `🔍 Searching for "..."` while fetching, then streams the answer
 - `/search` command remains as an explicit override

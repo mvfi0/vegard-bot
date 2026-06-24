@@ -242,6 +242,12 @@ class Chat(commands.Cog):
                         )
 
             content = _tagged(message.author.display_name, message.content)
+            if mood_triggered:
+                content += (
+                    "\n[System: You are joining the user's voice channel right now and "
+                    "playing their comfort playlist. Acknowledge this naturally and briefly "
+                    "— something like telling them you'll put on their playlist. Keep it short and casual.]"
+                )
             # Mood messages don't need web search — use plain streaming
             await self._stream_reply(message, str(message.channel.id), content,
                                      auto_search=not mood_triggered)

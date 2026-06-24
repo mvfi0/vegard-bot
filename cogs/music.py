@@ -16,16 +16,24 @@ _COMFORT_FALLBACK = [
 ]
 
 _YDL_OPTS = {
-    "format": "bestaudio/best",
+    "format": "bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best",
     "quiet": True,
     "no_warnings": True,
     "default_search": "ytsearch",
     "noplaylist": True,
     "source_address": "0.0.0.0",
+    "http_headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    },
 }
 
+_FFMPEG_BEFORE_OPTS = (
+    "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 "
+    "-user_agent \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\""
+)
+
 _FFMPEG_OPTS = {
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "before_options": _FFMPEG_BEFORE_OPTS,
     "options": "-vn -bufsize 64k",
 }
 
@@ -212,7 +220,7 @@ class MusicCog(commands.Cog):
 
         def after(error: Exception | None) -> None:
             if error:
-                print(f"[Music] playback error: {error}")
+                print(f"[Music] playback error for '{title}': {error}")
             if self._active.get(guild_id):
                 asyncio.run_coroutine_threadsafe(
                     self._play_next(vc, text_channel), self.bot.loop
