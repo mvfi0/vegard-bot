@@ -26,6 +26,18 @@ _MOOD_TRIGGERS = {
     "ga semangat", "gak semangat", "pengen nangis", "butuh temen",
 }
 
+# Explicit playlist requests — owner asking the bot to play their Spotify playlist
+_PLAYLIST_TRIGGERS = {
+    "play me my playlist", "play my playlist", "play my comfort playlist",
+    "put on my playlist", "start my playlist", "play me something",
+    "play some music", "put on some music", "play music for me",
+    "play me music", "play me a song", "play me some music",
+    # Indonesian
+    "puterin playlist", "puterin musik", "putar playlist", "putar musik",
+    "play playlist aku", "play musik dong", "play dong", "kasih musik dong",
+    "mau dengerin musik", "dengerin musik", "mau denger musik",
+}
+
 # Words that mean "stop the music / leave vc"
 _STOP_TRIGGERS = {
     "stop the music", "stop music", "leave vc", "leave the vc",
@@ -36,6 +48,11 @@ _STOP_TRIGGERS = {
 def _is_mood_message(text: str) -> bool:
     lower = text.lower()
     return any(t in lower for t in _MOOD_TRIGGERS)
+
+
+def _is_playlist_request(text: str) -> bool:
+    lower = text.lower()
+    return any(t in lower for t in _PLAYLIST_TRIGGERS)
 
 
 def _is_stop_music(text: str) -> bool:
@@ -231,7 +248,7 @@ class Chat(commands.Cog):
                     if _is_stop_music(message.content):
                         asyncio.create_task(music.stop(message.guild))
                     elif (
-                        _is_mood_message(message.content)
+                        (_is_mood_message(message.content) or _is_playlist_request(message.content))
                         and isinstance(message.author, discord.Member)
                         and message.author.voice
                         and message.author.voice.channel
