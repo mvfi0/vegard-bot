@@ -4,6 +4,10 @@ All notable changes to V.E.G.A.R.D. are documented here.
 
 ---
 
+### v1.2.1 — 2026-06-25
+- Spotify comfort playlist now plays silently — no now-playing embed for background tracks
+- Now-playing embed only appears for songs explicitly queued via `/play`
+
 ### v1.2.0 — 2026-06-25
 - Added `/play`, `/skip`, `/stop`, `/loop`, `/queue` slash commands for music control
 - `/play <song>` accepts song names or YouTube URLs; resolves and displays the actual track title

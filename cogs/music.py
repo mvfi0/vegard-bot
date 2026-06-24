@@ -166,6 +166,7 @@ class MusicCog(commands.Cog):
         self._np_message: dict[int, discord.Message] = {}
         self._loop_mode: dict[int, str] = {}  # "off" | "queue" | "song"
         self._current: dict[int, tuple[str, str, str | None]] = {}  # (url, title, thumbnail)
+        self._current_is_public: dict[int, bool] = {}  # False for Spotify tracks
         self._requests: dict[int, deque] = {}  # songs queued via /play (shown in /queue)
 
     async def cog_load(self) -> None:
@@ -218,12 +219,15 @@ class MusicCog(commands.Cog):
         loop_mode = self._loop_mode.get(guild_id, "queue")
 
         # Song loop: replay the current track without fetching a new one
+        is_public = False  # True only for /play songs — those get the now-playing embed
         if loop_mode == "song" and not query and guild_id in self._current:
             url, title, thumbnail = self._current[guild_id]
+            is_public = self._current_is_public.get(guild_id, False)
         elif not query and self._requests.get(guild_id):
             # Pre-fetched /play request — no need to call yt-dlp again
             url, title, thumbnail = self._requests[guild_id].popleft()
             self._current[guild_id] = (url, title, thumbnail)
+            is_public = True
         else:
             if loop_mode == "off" and not self._queue.get(guild_id) and not query:
                 self._active[guild_id] = False
@@ -241,25 +245,29 @@ class MusicCog(commands.Cog):
                 return
 
             self._current[guild_id] = (url, title, thumbnail)
+            is_public = bool(query)  # explicit /play query → public; Spotify → private
+
+        self._current_is_public[guild_id] = is_public
 
         print(f"[Music] Now playing: {title}")
-        embed = _now_playing_embed(title, thumbnail)
-        view = NowPlayingView(self, vc.guild)
 
-        # Sync loop button state to current mode
-        loop_btn = view.loop_toggle
-        loop_btn.emoji = _LOOP_EMOJI[loop_mode]
-        loop_btn.style = _LOOP_STYLE[loop_mode]
+        # Only update the now-playing embed for /play songs — Spotify tracks play silently
+        if is_public:
+            embed = _now_playing_embed(title, thumbnail)
+            view = NowPlayingView(self, vc.guild)
+            loop_btn = view.loop_toggle
+            loop_btn.emoji = _LOOP_EMOJI[loop_mode]
+            loop_btn.style = _LOOP_STYLE[loop_mode]
 
-        existing = self._np_message.get(guild_id)
-        if existing:
-            try:
-                await existing.edit(embed=embed, view=view)
-            except discord.NotFound:
-                existing = None
+            existing = self._np_message.get(guild_id)
+            if existing:
+                try:
+                    await existing.edit(embed=embed, view=view)
+                except discord.NotFound:
+                    existing = None
 
-        if not existing:
-            self._np_message[guild_id] = await text_channel.send(embed=embed, view=view)
+            if not existing:
+                self._np_message[guild_id] = await text_channel.send(embed=embed, view=view)
 
         def after(error: Exception | None) -> None:
             if error:
@@ -277,6 +285,7 @@ class MusicCog(commands.Cog):
         self._np_message.pop(guild.id, None)
         self._loop_mode.pop(guild.id, None)
         self._current.pop(guild.id, None)
+        self._current_is_public.pop(guild.id, None)
         self._requests.pop(guild.id, None)
         vc = guild.voice_client
         if vc:
