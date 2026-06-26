@@ -20,19 +20,27 @@ def fetch_lyrics(artist: str, title: str) -> str | None:
 
 _FOOTER_RE = re.compile(
     r"(you might also like|see \w+ lyrics|more on genius|^embed$"
-    r"|writers?:|lyrics powered by|all rights reserved|\d+ contributors"
+    r"|lyrics powered by|all rights reserved|\d+ contributors?"
     r"|^credits$|^tags$|^comments$|sign up and drop|genius is the ultimate"
-    r"|released on|tie.in|^Q&A$)",
+    r"|^song bio$|^about$|^q&a$|^translations?$)",
     re.IGNORECASE,
 )
 
 # Lines that are clearly page metadata, not lyrics
 _META_LINE_RE = re.compile(
-    r"^\d[\d,\.]*[KM]?\s*(view|viewer)|"   # "133.5K views", "1 viewer"
-    r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d+,\s+\d{4}$|"  # dates
+    r"^\d[\d,\.]*[KM]?\s*(view|viewer)|"       # "133.5K views", "1 viewer"
+    r"^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d+,\s+\d{4}$|"
     r"^\d+\s*(contributor|translation)|"
-    r"^(About|Featuring|Produced|Written|Album|Release)\b",
+    r"^(Producer|Featuring|Written|Album|Release|Track\s+\d|Label)\b|"
+    r"^\d+$|"                                   # lone numbers ("3")
+    r"^[•·]\s*",                                # bullet points (language links etc.)
     re.IGNORECASE,
+)
+
+# Only match real lyrics section headers — not arbitrary [brackets] in metadata
+_SECTION_START_RE = re.compile(
+    r'^\[(Verse|Chorus|Pre.?Chorus|Bridge|Outro|Intro|Hook|Refrain|Interlude)\b',
+    re.IGNORECASE | re.MULTILINE,
 )
 
 # [[Section]](/url) → [Section]  (Genius section header links)
@@ -102,10 +110,16 @@ def _clean_raw(raw: str) -> str:
 
     content = "\n".join(lines)
 
-    # Skip page title + description — lyrics proper start at the first [Section] tag
-    section_match = re.search(r'^\[.+\]$', content, re.MULTILINE)
+    # Slice to the first real lyrics section header ([Verse], [Chorus], etc.)
+    # Using a strict allowlist avoids matching stray [brackets] in page metadata
+    section_match = _SECTION_START_RE.search(content)
     if section_match:
         content = content[section_match.start():]
+
+    # Cut at "Song Bio" / biography prose that follows the lyrics
+    bio_match = re.search(r'^song bio\b', content, re.IGNORECASE | re.MULTILINE)
+    if bio_match:
+        content = content[:bio_match.start()]
 
     return content.strip()
 
