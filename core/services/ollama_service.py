@@ -55,6 +55,23 @@ _SEARCH_OFFER_PHRASES = (
 )
 
 
+_TOOL_PREAMBLE_RE = __import__("re").compile(
+    r"^.*?(?:can'?t|won'?t|don'?t need to|cannot|will not)\s+call\s+\w*search\w*.*?\n+",
+    __import__("re").IGNORECASE | __import__("re").DOTALL,
+)
+
+
+def _strip_tool_preamble(text: str) -> str:
+    """Remove lines where the model narrates its decision not to call a tool."""
+    match = _TOOL_PREAMBLE_RE.match(text)
+    if match:
+        text = text[match.end():].strip()
+    # Also strip quoted wrapper ("Hey bro..." → Hey bro...)
+    if text.startswith('"') and text.endswith('"'):
+        text = text[1:-1].strip()
+    return text
+
+
 def _needs_search_check(text: str, last_assistant: str = "") -> bool:
     """Return True if the message should go through the tool-check pass."""
     lower = text.lower()
@@ -256,7 +273,7 @@ class OllamaService:
             reply = tool_resp.message.content or ""
             for tok in ("<|im_start|>system", "<|im_start|>", "<|im_end|>"):
                 reply = reply.replace(tok, "")
-            reply = reply.strip()
+            reply = _strip_tool_preamble(reply.strip())
             self.history.append(user_id, "assistant", reply)
             yield reply
 

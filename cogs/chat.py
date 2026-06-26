@@ -349,12 +349,13 @@ class Chat(commands.Cog):
                     "present. Listen and validate first; only give advice if they ask for it. "
                     "Keep the tone personal and caring, like a close friend.]"
                 )
-            is_sensitive = (self._sensitive_channel_id and
-                            message.channel.id == self._sensitive_channel_id)
+            is_sensitive = bool(self._sensitive_channel_id and
+                                message.channel.id == self._sensitive_channel_id)
             model = self._sensitive_channel_model if is_sensitive else None
-            # Mood messages don't need web search — use plain streaming
+            # Sensitive and mood channels never need web search
             await self._stream_reply(message, str(message.channel.id), content,
-                                     auto_search=not mood_triggered, model=model)
+                                     auto_search=not (mood_triggered or is_sensitive),
+                                     model=model)
             return
 
         # ── Other channels: @mention required ─────────────────────────────────
