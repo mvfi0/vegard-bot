@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.services.ollama_service import OllamaService
-from services.lyrics import fetch_lyrics
+from services.lyrics import fetch_lyrics, parse_yt_title
 from services.rate_limiter import RateLimiter
 from services.search import web_search
 
@@ -213,25 +213,60 @@ class Chat(commands.Cog):
 
     # ── /lyrics ───────────────────────────────────────────────────────────────
 
-    @app_commands.command(name="lyrics", description="Fetch lyrics for a song")
+    @app_commands.command(name="lyrics", description="Fetch lyrics for a song (omit both to use the current track)")
     @app_commands.describe(song="Song title", artist="Artist name")
-    async def slash_lyrics(self, interaction: discord.Interaction, song: str, artist: str):
+    async def slash_lyrics(
+        self,
+        interaction: discord.Interaction,
+        song: str = "",
+        artist: str = "",
+    ):
         await interaction.response.defer(thinking=True)
+
+        display_title = ""
+
+        # No args — try to use the currently playing track
+        if not song and not artist:
+            music: "MusicCog | None" = self.bot.cogs.get("MusicCog")  # type: ignore[assignment]
+            current = music._current.get(interaction.guild.id) if music else None
+            if not current:
+                await interaction.followup.send(
+                    "Nothing is playing right now. Use `/lyrics song:... artist:...` instead."
+                )
+                return
+
+            _, yt_title, _ = current
+            parsed = parse_yt_title(yt_title)
+            if not parsed:
+                await interaction.followup.send(
+                    f"Couldn't parse the current track title **\"{yt_title}\"** into artist/song. "
+                    "Try `/lyrics song:... artist:...` manually."
+                )
+                return
+
+            artist, song = parsed
+            display_title = yt_title  # show the raw YT title in the header
 
         loop = __import__("asyncio").get_event_loop()
         lyrics = await loop.run_in_executor(None, fetch_lyrics, artist, song)
 
+        # lyrics.ovh sometimes needs artist and title swapped — try the other order
         if not lyrics:
+            lyrics = await loop.run_in_executor(None, fetch_lyrics, song, artist)
+            if lyrics:
+                artist, song = song, artist  # swap succeeded
+
+        if not lyrics:
+            hint = f" (parsed from \"{display_title}\")" if display_title else ""
             await interaction.followup.send(
-                f"Couldn't find lyrics for **{song}** by **{artist}**. "
-                "Double-check the spelling or try a different artist/title."
+                f"Couldn't find lyrics for **{song}** by **{artist}**{hint}. "
+                "Try adjusting the spelling or passing the args manually."
             )
             return
 
         header = f"🎵 **{song}** — {artist}\n\n"
         full = header + lyrics.strip()
 
-        # Split into 1990-char chunks to stay under Discord's 2000-char limit
         chunks = [full[i:i + 1990] for i in range(0, len(full), 1990)]
         await interaction.followup.send(chunks[0])
         for chunk in chunks[1:]:
