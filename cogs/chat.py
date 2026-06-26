@@ -236,25 +236,23 @@ class Chat(commands.Cog):
                 return
 
             _, yt_title, _ = current
+            display_title = yt_title
             parsed = parse_yt_title(yt_title)
-            if not parsed:
-                await interaction.followup.send(
-                    f"Couldn't parse the current track title **\"{yt_title}\"** into artist/song. "
-                    "Try `/lyrics song:... artist:...` manually."
-                )
-                return
-
-            artist, song = parsed
-            display_title = yt_title  # show the raw YT title in the header
+            if parsed:
+                artist, song = parsed
+            # If unparseable, leave artist/song empty — lyrics.ovh is skipped
+            # and Tavily will search using the full YouTube title
 
         loop = __import__("asyncio").get_event_loop()
-        lyrics = await loop.run_in_executor(None, fetch_lyrics, artist, song)
+        lyrics = None
 
-        # lyrics.ovh sometimes needs artist and title swapped — try the other order
-        if not lyrics:
-            lyrics = await loop.run_in_executor(None, fetch_lyrics, song, artist)
-            if lyrics:
-                artist, song = song, artist  # swap succeeded
+        if artist and song:
+            lyrics = await loop.run_in_executor(None, fetch_lyrics, artist, song)
+            # lyrics.ovh sometimes needs artist and title swapped — try the other order
+            if not lyrics:
+                lyrics = await loop.run_in_executor(None, fetch_lyrics, song, artist)
+                if lyrics:
+                    artist, song = song, artist
 
         if not lyrics:
             # lyrics.ovh failed — fall back to Tavily + AI

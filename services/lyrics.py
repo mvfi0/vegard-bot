@@ -30,16 +30,27 @@ def parse_yt_title(yt_title: str) -> tuple[str, str] | None:
     """
     Try to split a YouTube title into (artist, song).
     Returns None if no reliable split is found.
+    Handles: "Artist - Song", "Song by Artist", "Channel | Song by Artist"
     """
     cleaned = _YT_NOISE.sub("", yt_title).strip(" -–|")
 
-    if " - " in cleaned:
-        left, right = cleaned.split(" - ", 1)
-        return left.strip(), right.strip()
+    # "Artist - Song" or "Artist – Song"
+    for sep in (" - ", " – "):
+        if sep in cleaned:
+            left, right = cleaned.split(sep, 1)
+            return left.strip(), right.strip()
 
-    # En-dash variant
-    if " – " in cleaned:
-        left, right = cleaned.split(" – ", 1)
-        return left.strip(), right.strip()
+    # "... | Song by Artist" — pipe narrows to the song segment
+    candidate = cleaned
+    if " | " in cleaned:
+        candidate = cleaned.split(" | ")[-1].strip()
+
+    # "Song by Artist"
+    lower = candidate.lower()
+    if " by " in lower:
+        idx = lower.index(" by ")
+        song = candidate[:idx].strip()
+        artist = candidate[idx + 4:].strip()
+        return artist, song
 
     return None
