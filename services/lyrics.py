@@ -22,7 +22,8 @@ _FOOTER_RE = re.compile(
     r"(you might also like|see \w+ lyrics|more on genius|^embed$"
     r"|lyrics powered by|all rights reserved|\d+ contributors?"
     r"|^credits$|^tags$|^comments$|sign up and drop|genius is the ultimate"
-    r"|^song bio$|^about$|^q&a$|^translations?$)",
+    r"|^song bio$|^about$|^q&a$|^translations?$"
+    r"|^song overview$|review and highlights|^quick summary$)",
     re.IGNORECASE,
 )
 
@@ -33,7 +34,9 @@ _META_LINE_RE = re.compile(
     r"^\d+\s*(contributor|translation)|"
     r"^(Producer|Featuring|Written|Album|Release|Track\s+\d|Label)\b|"
     r"^\d+$|"                                   # lone numbers ("3")
-    r"^[•·]\s*",                                # bullet points (language links etc.)
+    r"^[•·\-\*]\s*[A-Z#]?\s*$|"               # bullet nav items (• A, • B, - #)
+    r"^[A-Z#]$|"                               # single-letter alphabet navigation
+    r"^#{1,6}\s+",                             # markdown headers (#### Quick summary)
     re.IGNORECASE,
 )
 
@@ -82,6 +85,12 @@ def fetch_lyrics_web(query: str) -> str | None:
         ordered = [r for r in results if not _is_translation(r)] + \
                   [r for r in results if _is_translation(r)]
 
+        # Prefer results whose raw content has proper [Verse]/[Chorus] section markers
+        def _has_sections(r: dict) -> bool:
+            return bool(_SECTION_START_RE.search(r.get("raw_content") or ""))
+
+        ordered.sort(key=lambda r: (not _has_sections(r), not _is_translation(r)))
+
         for result in ordered:
             raw = result.get("raw_content") or result.get("content", "")
             if not raw or len(raw) < 200:
@@ -97,8 +106,10 @@ def fetch_lyrics_web(query: str) -> str | None:
 def _clean_raw(raw: str) -> str:
     """Strip page boilerplate from a raw lyrics page, keeping only the lyric lines."""
     # Strip links on the full text first so multi-line Genius links are handled
-    text = _MD_SECTION_RE.sub(r'[\1]', raw)   # [[Chorus]](/url) → [Chorus]
-    text = _MD_LINK_RE.sub(r'\1', text)        # [line1\nline2](url) → line1\nline2
+    text = _MD_SECTION_RE.sub(r'[\1]', raw)                    # [[Chorus]](/url) → [Chorus]
+    text = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', text)           # ![alt](url) images
+    text = re.sub(r'^!.+$', '', text, flags=re.MULTILINE)      # !standalone image lines
+    text = _MD_LINK_RE.sub(r'\1', text)                        # [line1\nline2](url) → line1\nline2
 
     lines = []
     for line in text.splitlines():
