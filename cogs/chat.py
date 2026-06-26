@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.services.ollama_service import OllamaService
+from services.lyrics import fetch_lyrics
 from services.rate_limiter import RateLimiter
 from services.search import web_search
 
@@ -209,6 +210,32 @@ class Chat(commands.Cog):
 
         view = RegenerateView(self.ai, channel_id, tagged, search_context)
         await sent.edit(content=(final_text.strip() or "…")[:2000], view=view)
+
+    # ── /lyrics ───────────────────────────────────────────────────────────────
+
+    @app_commands.command(name="lyrics", description="Fetch lyrics for a song")
+    @app_commands.describe(song="Song title", artist="Artist name")
+    async def slash_lyrics(self, interaction: discord.Interaction, song: str, artist: str):
+        await interaction.response.defer(thinking=True)
+
+        loop = __import__("asyncio").get_event_loop()
+        lyrics = await loop.run_in_executor(None, fetch_lyrics, artist, song)
+
+        if not lyrics:
+            await interaction.followup.send(
+                f"Couldn't find lyrics for **{song}** by **{artist}**. "
+                "Double-check the spelling or try a different artist/title."
+            )
+            return
+
+        header = f"🎵 **{song}** — {artist}\n\n"
+        full = header + lyrics.strip()
+
+        # Split into 1990-char chunks to stay under Discord's 2000-char limit
+        chunks = [full[i:i + 1990] for i in range(0, len(full), 1990)]
+        await interaction.followup.send(chunks[0])
+        for chunk in chunks[1:]:
+            await interaction.channel.send(chunk)
 
     # ── /clear ────────────────────────────────────────────────────────────────
 

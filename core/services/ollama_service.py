@@ -41,6 +41,7 @@ _SEARCH_HINTS = {
     "this week", "this month", "this year", "2025", "2026",
     "who won", "who is", "what happened", "what's happening",
     "breaking", "update", "released", "announced", "launched",
+    "lyrics", "lirik",
 }
 
 # Short confirmations that mean "yes, do the thing you just offered"
