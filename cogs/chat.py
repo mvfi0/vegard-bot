@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from core.services.ollama_service import OllamaService
-from services.lyrics import fetch_lyrics, parse_yt_title
+from services.lyrics import fetch_lyrics, fetch_lyrics_web, parse_yt_title
 from services.rate_limiter import RateLimiter
 from services.search import web_search
 
@@ -255,23 +255,15 @@ class Chat(commands.Cog):
                     artist, song = song, artist
 
         if not lyrics:
-            # lyrics.ovh failed — fall back to Tavily + AI
+            # lyrics.ovh failed — fetch raw content from the top web result (Genius etc.)
             search_query = display_title or f"{song} {artist}".strip()
-            try:
-                search_context = await loop.run_in_executor(
-                    None, web_search, f"{search_query} lyrics"
-                )
-                prompt = (
-                    f"The user wants the full lyrics for \"{search_query}\". "
-                    "Using the search results below, reproduce the complete lyrics as accurately as possible. "
-                    "Output only the lyrics — no intro, no commentary, no links."
-                )
-                lyrics = await self.ai.chat(
-                    str(interaction.channel_id), prompt, search_context
-                )
-            except Exception as exc:
-                await interaction.followup.send(f"Lyrics search failed: `{exc}`")
-                return
+            lyrics = await loop.run_in_executor(None, fetch_lyrics_web, search_query)
+
+        if not lyrics:
+            await interaction.followup.send(
+                f"Couldn't find lyrics for **{display_title or f'{song} {artist}'}**."
+            )
+            return
 
         label = display_title or f"{song} — {artist}"
         header = f"🎵 **{label}**\n\n"
