@@ -257,14 +257,26 @@ class Chat(commands.Cog):
                 artist, song = song, artist  # swap succeeded
 
         if not lyrics:
-            hint = f" (parsed from \"{display_title}\")" if display_title else ""
-            await interaction.followup.send(
-                f"Couldn't find lyrics for **{song}** by **{artist}**{hint}. "
-                "Try adjusting the spelling or passing the args manually."
-            )
-            return
+            # lyrics.ovh failed — fall back to Tavily + AI
+            search_query = display_title or f"{song} {artist}".strip()
+            try:
+                search_context = await loop.run_in_executor(
+                    None, web_search, f"{search_query} lyrics"
+                )
+                prompt = (
+                    f"The user wants the full lyrics for \"{search_query}\". "
+                    "Using the search results below, reproduce the complete lyrics as accurately as possible. "
+                    "Output only the lyrics — no intro, no commentary, no links."
+                )
+                lyrics = await self.ai.chat(
+                    str(interaction.channel_id), prompt, search_context
+                )
+            except Exception as exc:
+                await interaction.followup.send(f"Lyrics search failed: `{exc}`")
+                return
 
-        header = f"🎵 **{song}** — {artist}\n\n"
+        label = display_title or f"{song} — {artist}"
+        header = f"🎵 **{label}**\n\n"
         full = header + lyrics.strip()
 
         chunks = [full[i:i + 1990] for i in range(0, len(full), 1990)]
