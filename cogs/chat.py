@@ -144,12 +144,14 @@ class Chat(commands.Cog):
         chat_channel_ids: set[int],
         owner_id: int | None = None,
         sensitive_channel_id: int | None = None,
+        sensitive_channel_model: str | None = None,
     ):
         self.bot = bot
         self.ai = ai
         self.chat_channel_ids = chat_channel_ids
         self._owner_id = owner_id
         self._sensitive_channel_id = sensitive_channel_id
+        self._sensitive_channel_model = sensitive_channel_model
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
         self._chat_rl = RateLimiter(cooldown=3.0)
@@ -347,9 +349,12 @@ class Chat(commands.Cog):
                     "present. Listen and validate first; only give advice if they ask for it. "
                     "Keep the tone personal and caring, like a close friend.]"
                 )
+            is_sensitive = (self._sensitive_channel_id and
+                            message.channel.id == self._sensitive_channel_id)
+            model = self._sensitive_channel_model if is_sensitive else None
             # Mood messages don't need web search — use plain streaming
             await self._stream_reply(message, str(message.channel.id), content,
-                                     auto_search=not mood_triggered)
+                                     auto_search=not mood_triggered, model=model)
             return
 
         # ── Other channels: @mention required ─────────────────────────────────
@@ -367,7 +372,7 @@ class Chat(commands.Cog):
         content = _tagged(message.author.display_name, content)
         await self._stream_reply(message, str(message.channel.id), content)
 
-    async def _stream_reply(self, message: discord.Message, channel_id: str, tagged_content: str, auto_search: bool = True) -> None:
+    async def _stream_reply(self, message: discord.Message, channel_id: str, tagged_content: str, auto_search: bool = True, model: str | None = None) -> None:
         """Stream tokens into a Discord message, editing at most once per second."""
         sent = await message.reply("▌")
         last_edit = time.monotonic()
@@ -375,7 +380,7 @@ class Chat(commands.Cog):
 
         stream_fn = self.ai.stream_chat_auto if auto_search else self.ai.stream_chat
         try:
-            async for text in stream_fn(channel_id, tagged_content, self._context):
+            async for text in stream_fn(channel_id, tagged_content, self._context, model=model):
                 final_text = text
                 now = time.monotonic()
                 elapsed = now - last_edit
@@ -406,5 +411,6 @@ async def setup(
     chat_channel_ids: set[int],
     owner_id: int | None = None,
     sensitive_channel_id: int | None = None,
+    sensitive_channel_model: str | None = None,
 ):
-    await bot.add_cog(Chat(bot, ai, chat_channel_ids, owner_id, sensitive_channel_id))
+    await bot.add_cog(Chat(bot, ai, chat_channel_ids, owner_id, sensitive_channel_id, sensitive_channel_model))

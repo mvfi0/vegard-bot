@@ -35,6 +35,7 @@ _owner_env = os.getenv("OWNER_ID", "")
 OWNER_ID: int | None = int(_owner_env) if _owner_env.isdigit() else None
 _sensitive_env = os.getenv("SENSITIVE_CHANNEL_ID", "")
 SENSITIVE_CHANNEL_ID: int | None = int(_sensitive_env) if _sensitive_env.isdigit() else None
+SENSITIVE_CHANNEL_MODEL: str | None = os.getenv("SENSITIVE_CHANNEL_MODEL") or None
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -52,7 +53,7 @@ class Bot(commands.Bot):
 
     async def setup_hook(self):
         await setup_music(self)
-        await setup_chat(self, self.ai, CHAT_CHANNEL_IDS, OWNER_ID, SENSITIVE_CHANNEL_ID)
+        await setup_chat(self, self.ai, CHAT_CHANNEL_IDS, OWNER_ID, SENSITIVE_CHANNEL_ID, SENSITIVE_CHANNEL_MODEL)
         await self.tree.sync()
         print("Slash commands synced.")
 

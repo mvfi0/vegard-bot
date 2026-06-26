@@ -110,7 +110,7 @@ class OllamaService:
         self._client = ollama.AsyncClient()
         self.history = HistoryManager(persist_path=_HISTORY_PATH)
 
-    async def chat(self, user_id: str, message: str, context: str | None = None) -> str:
+    async def chat(self, user_id: str, message: str, context: str | None = None, model: str | None = None) -> str:
         self.history.append(user_id, "user", message)
 
         now = datetime.now().strftime("%A, %d %B %Y, %H:%M")
@@ -123,7 +123,7 @@ class OllamaService:
         ]
 
         response = await self._client.chat(
-            model=self.model,
+            model=model or self.model,
             messages=messages,
             options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
         )
@@ -138,7 +138,7 @@ class OllamaService:
         return reply
 
     async def stream_chat(
-        self, user_id: str, message: str, context: str | None = None
+        self, user_id: str, message: str, context: str | None = None, model: str | None = None
     ) -> AsyncGenerator[str, None]:
         self.history.append(user_id, "user", message)
 
@@ -151,9 +151,10 @@ class OllamaService:
             *self.history.get(user_id),
         ]
 
+        _model = model or self.model
         accumulated = ""
         async for chunk in await self._client.chat(
-            model=self.model,
+            model=_model,
             messages=messages,
             options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
             stream=True,
@@ -170,7 +171,7 @@ class OllamaService:
         self.history.append(user_id, "assistant", final.strip())
 
     async def stream_chat_auto(
-        self, user_id: str, message: str, context: str | None = None
+        self, user_id: str, message: str, context: str | None = None, model: str | None = None
     ) -> AsyncGenerator[str, None]:
         """Like stream_chat, but runs web_search automatically when the model requests it."""
         self.history.append(user_id, "user", message)
@@ -190,11 +191,13 @@ class OllamaService:
             (m["content"] for m in reversed(_hist_so_far) if m["role"] == "assistant"), ""
         )
 
+        _model = model or self.model
+
         # Fast gate: skip tool-check for messages with no search-relevant keywords
         if not _needs_search_check(message, _last_assistant):
             accumulated = ""
             async for chunk in await self._client.chat(
-                model=self.model,
+                model=_model,
                 messages=messages,
                 options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
                 stream=True,
@@ -212,7 +215,7 @@ class OllamaService:
 
         # Non-streaming pass to check whether the model wants to search
         tool_resp = await self._client.chat(
-            model=self.model,
+            model=_model,
             messages=messages,
             tools=[_SEARCH_TOOL],
             options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
@@ -233,7 +236,7 @@ class OllamaService:
 
             accumulated = ""
             async for chunk in await self._client.chat(
-                model=self.model,
+                model=_model,
                 messages=messages_with_tool,
                 options={"stop": ["<|im_start|>", "<|im_end|>", "<|im_start|>system"]},
                 stream=True,
