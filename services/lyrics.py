@@ -35,8 +35,10 @@ _META_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Markdown links [text](url) → keep only the text
-_MD_LINK_RE = re.compile(r'\[([^\]]+)\]\([^)]+\)')
+# [[Section]](/url) → [Section]  (Genius section header links)
+_MD_SECTION_RE = re.compile(r'\[\[([^\]]+)\]\]\([^)]+\)')
+# [text](url) — applied with DOTALL so it catches multi-line link text
+_MD_LINK_RE = re.compile(r'\[([^\]]*)\]\([^)]+\)', re.DOTALL)
 
 
 def fetch_lyrics_web(query: str) -> str | None:
@@ -86,24 +88,24 @@ def fetch_lyrics_web(query: str) -> str | None:
 
 def _clean_raw(raw: str) -> str:
     """Strip page boilerplate from a raw lyrics page, keeping only the lyric lines."""
+    # Strip links on the full text first so multi-line Genius links are handled
+    text = _MD_SECTION_RE.sub(r'[\1]', raw)   # [[Chorus]](/url) → [Chorus]
+    text = _MD_LINK_RE.sub(r'\1', text)        # [line1\nline2](url) → line1\nline2
+
     lines = []
-    for line in raw.splitlines():
-        # Stop at footer sections
+    for line in text.splitlines():
         if _FOOTER_RE.search(line.strip()):
             break
-        # Strip markdown links
-        line = _MD_LINK_RE.sub(r'\1', line)
-        # Skip obvious metadata lines
         if _META_LINE_RE.match(line.strip()):
             continue
         lines.append(line)
 
-    # Drop the leading non-lyric header (short info lines before the actual lyrics start)
-    # Lyrics start at the first [section tag] like [Verse 1] or first multi-word line
     content = "\n".join(lines)
-    match = re.search(r'(\[.+?\]|(?:\S+ ){3,})', content)
-    if match:
-        content = content[match.start():]
+
+    # Skip page title + description — lyrics proper start at the first [Section] tag
+    section_match = re.search(r'^\[.+\]$', content, re.MULTILINE)
+    if section_match:
+        content = content[section_match.start():]
 
     return content.strip()
 
