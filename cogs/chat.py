@@ -266,13 +266,22 @@ class Chat(commands.Cog):
             return
 
         label = display_title or f"{song} — {artist}"
-        header = f"🎵 **{label}**\n\n"
-        full = header + lyrics.strip()
+        body = lyrics.strip()
 
-        chunks = [full[i:i + 1990] for i in range(0, len(full), 1990)]
-        await interaction.followup.send(chunks[0])
+        # Split into 4000-char chunks (embed description limit is 4096)
+        chunks = [body[i:i + 4000] for i in range(0, len(body), 4000)]
+
+        first = discord.Embed(
+            title=f"🎵 {label}",
+            description=chunks[0],
+            color=discord.Color.from_rgb(30, 215, 96),
+        )
+        await interaction.followup.send(embed=first)
+
         for chunk in chunks[1:]:
-            await interaction.channel.send(chunk)
+            await interaction.channel.send(
+                embed=discord.Embed(description=chunk, color=discord.Color.from_rgb(30, 215, 96))
+            )
 
     # ── /clear ────────────────────────────────────────────────────────────────
 
