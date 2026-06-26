@@ -143,13 +143,13 @@ class Chat(commands.Cog):
         ai: OllamaService,
         chat_channel_ids: set[int],
         owner_id: int | None = None,
-        curhat_channel_id: int | None = None,
+        sensitive_channel_id: int | None = None,
     ):
         self.bot = bot
         self.ai = ai
         self.chat_channel_ids = chat_channel_ids
         self._owner_id = owner_id
-        self._curhat_channel_id = curhat_channel_id
+        self._sensitive_channel_id = sensitive_channel_id
         self._users: dict = _load_users()
         self._context: str | None = _build_context(self._users)
         self._chat_rl = RateLimiter(cooldown=3.0)
@@ -340,7 +340,7 @@ class Chat(commands.Cog):
                     "playing their comfort playlist. Acknowledge this naturally and briefly "
                     "— something like telling them you'll put on their playlist. Keep it short and casual.]"
                 )
-            elif self._curhat_channel_id and message.channel.id == self._curhat_channel_id:
+            elif self._sensitive_channel_id and message.channel.id == self._sensitive_channel_id:
                 content += (
                     "\n[System: This is the user's personal curhat channel — a private space "
                     "for them to vent, share feelings, or just talk. Be warm, empathetic, and "
@@ -405,6 +405,6 @@ async def setup(
     ai: OllamaService,
     chat_channel_ids: set[int],
     owner_id: int | None = None,
-    curhat_channel_id: int | None = None,
+    sensitive_channel_id: int | None = None,
 ):
-    await bot.add_cog(Chat(bot, ai, chat_channel_ids, owner_id, curhat_channel_id))
+    await bot.add_cog(Chat(bot, ai, chat_channel_ids, owner_id, sensitive_channel_id))
