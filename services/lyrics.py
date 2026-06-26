@@ -23,8 +23,15 @@ _FOOTER_RE = re.compile(
     r"|lyrics powered by|all rights reserved|\d+ contributors?"
     r"|^credits$|^tags$|^comments$|sign up and drop|genius is the ultimate"
     r"|^song bio$|^about$|^q&a$|^translations?$"
-    r"|^song overview$|review and highlights|^quick summary$)",
+    r"|^song overview$|review and highlights|^quick summary$"
+    r"|how to format lyrics|transcription guide|transcribers.{0,10}forum"
+    r"|frequently asked questions about the song)",
     re.IGNORECASE,
+)
+
+# Genius placeholder text that means the lyrics haven't been added yet
+_GENIUS_EMPTY_RE = re.compile(
+    r"how to format lyrics|transcription guide", re.IGNORECASE
 )
 
 # Lines that are clearly page metadata, not lyrics
@@ -95,8 +102,11 @@ def fetch_lyrics_web(query: str) -> str | None:
             raw = result.get("raw_content") or result.get("content", "")
             if not raw or len(raw) < 200:
                 continue
+            # Skip Genius placeholder pages (lyrics not yet transcribed)
+            if _GENIUS_EMPTY_RE.search(raw):
+                continue
             cleaned = _clean_raw(raw)
-            if cleaned:
+            if cleaned and len(cleaned) > 100:
                 return cleaned
     except Exception:
         pass
